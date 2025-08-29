@@ -1,0 +1,4305 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>auth: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/cupbot/cupbot/internal/auth/middleware.go (86.3%)</option>
+				
+				<option value="file1">github.com/cupbot/cupbot/internal/bot/bot.go (38.2%)</option>
+				
+				<option value="file2">github.com/cupbot/cupbot/internal/config/config.go (80.9%)</option>
+				
+				<option value="file3">github.com/cupbot/cupbot/internal/database/database.go (20.6%)</option>
+				
+				<option value="file4">github.com/cupbot/cupbot/internal/events/service.go (0.0%)</option>
+				
+				<option value="file5">github.com/cupbot/cupbot/internal/filemanager/service.go (44.9%)</option>
+				
+				<option value="file6">github.com/cupbot/cupbot/internal/power/service.go (44.2%)</option>
+				
+				<option value="file7">github.com/cupbot/cupbot/internal/screenshot/service.go (0.0%)</option>
+				
+				<option value="file8">github.com/cupbot/cupbot/internal/service/service.go (0.0%)</option>
+				
+				<option value="file9">github.com/cupbot/cupbot/internal/system/service.go (80.2%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package auth
+
+import (
+        "fmt"
+        "log"
+        "time"
+
+        "github.com/cupbot/cupbot/internal/config"
+        "github.com/cupbot/cupbot/internal/database"
+        tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
+
+// Middleware предоставляет функции авторизации и аутентификации
+type Middleware struct {
+        config *config.Config
+        db     *database.DB
+}
+
+// NewMiddleware создает новый экземпляр middleware
+func NewMiddleware(cfg *config.Config, db *database.DB) *Middleware <span class="cov8" title="1">{
+        return &amp;Middleware{
+                config: cfg,
+                db:     db,
+        }
+}</span>
+
+// AuthorizeUser проверяет права пользователя на выполнение команд
+func (m *Middleware) AuthorizeUser(update tgbotapi.Update) (bool, *database.User) <span class="cov8" title="1">{
+        var user *tgbotapi.User
+        var chatID int64
+
+        // Получаем пользователя из разных типов обновлений
+        if update.Message != nil </span><span class="cov8" title="1">{
+                user = update.Message.From
+                chatID = update.Message.Chat.ID
+        }</span> else<span class="cov8" title="1"> if update.CallbackQuery != nil </span><span class="cov8" title="1">{
+                user = update.CallbackQuery.From
+                chatID = update.CallbackQuery.Message.Chat.ID
+        }</span> else<span class="cov8" title="1"> {
+                return false, nil
+        }</span>
+
+        <span class="cov8" title="1">if user == nil </span><span class="cov0" title="0">{
+                return false, nil
+        }</span>
+
+        // Проверяем, разрешен ли пользователь в конфигурации
+        <span class="cov8" title="1">if !m.config.IsAllowed(user.ID) </span><span class="cov8" title="1">{
+                log.Printf("Unauthorized access attempt from user %d (%s)", user.ID, user.UserName)
+                return false, nil
+        }</span>
+
+        // Создаем или обновляем пользователя в базе данных
+        <span class="cov8" title="1">dbUser := &amp;database.User{
+                ID:        user.ID,
+                Username:  user.UserName,
+                FirstName: user.FirstName,
+                LastName:  user.LastName,
+                IsAdmin:   m.config.IsAdmin(user.ID),
+                IsActive:  true,
+                UpdatedAt: time.Now(),
+        }
+
+        // Проверяем, существует ли пользователь в БД
+        existingUser, err := m.db.GetUser(user.ID)
+        if err != nil </span><span class="cov8" title="1">{
+                // Пользователь не найден, создаем нового
+                dbUser.CreatedAt = time.Now()
+        }</span> else<span class="cov0" title="0"> {
+                // Пользователь существует, сохраняем дату создания
+                dbUser.CreatedAt = existingUser.CreatedAt
+        }</span>
+
+        <span class="cov8" title="1">if err := m.db.CreateOrUpdateUser(dbUser); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Failed to create/update user %d: %v", user.ID, err)
+        }</span>
+
+        // Обновляем сессию пользователя
+        <span class="cov8" title="1">session := &amp;database.UserSession{
+                UserID:   user.ID,
+                ChatID:   chatID,
+                LastSeen: time.Now(),
+                IsActive: true,
+        }
+
+        if err := m.db.UpdateUserSession(session); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Failed to update user session %d: %v", user.ID, err)
+        }</span>
+
+        <span class="cov8" title="1">return true, dbUser</span>
+}
+
+// RequireAdmin проверяет, является ли пользователь администратором
+func (m *Middleware) RequireAdmin(userID int64) bool <span class="cov8" title="1">{
+        return m.config.IsAdmin(userID)
+}</span>
+
+// LogCommand записывает выполненную команду в историю
+func (m *Middleware) LogCommand(userID int64, command string, args string, success bool, response string) <span class="cov8" title="1">{
+        history := &amp;database.CommandHistory{
+                UserID:     userID,
+                Command:    command,
+                Arguments:  args,
+                Success:    success,
+                Response:   response,
+                ExecutedAt: time.Now(),
+        }
+
+        if err := m.db.AddCommandHistory(history); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Failed to log command for user %d: %v", userID, err)
+        }</span>
+}
+
+// GetUserHistory возвращает историю команд пользователя
+func (m *Middleware) GetUserHistory(userID int64, limit int) ([]*database.CommandHistory, error) <span class="cov8" title="1">{
+        return m.db.GetCommandHistory(userID, limit)
+}</span>
+
+// GetAllHistory возвращает всю историю команд (только для админов)
+func (m *Middleware) GetAllHistory(userID int64, limit int) ([]*database.CommandHistory, error) <span class="cov8" title="1">{
+        if !m.RequireAdmin(userID) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("access denied: admin privileges required")
+        }</span>
+        <span class="cov8" title="1">return m.db.GetAllCommandHistory(limit)</span>
+}
+
+// GetStats возвращает статистику использования (только для админов)
+func (m *Middleware) GetStats(userID int64) (map[string]interface{}, error) <span class="cov8" title="1">{
+        if !m.RequireAdmin(userID) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("access denied: admin privileges required")
+        }</span>
+        <span class="cov8" title="1">return m.db.GetStats()</span>
+}
+
+// CleanupOldData очищает старые данные (только для админов)
+func (m *Middleware) CleanupOldData(userID int64, days int) error <span class="cov8" title="1">{
+        if !m.RequireAdmin(userID) </span><span class="cov8" title="1">{
+                return fmt.Errorf("access denied: admin privileges required")
+        }</span>
+        <span class="cov8" title="1">return m.db.CleanOldHistory(days)</span>
+}
+
+// GetActiveUsers возвращает список активных пользователей (только для админов)
+func (m *Middleware) GetActiveUsers(userID int64, minutes int) ([]*database.UserSession, error) <span class="cov8" title="1">{
+        if !m.RequireAdmin(userID) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("access denied: admin privileges required")
+        }</span>
+        <span class="cov8" title="1">return m.db.GetActiveUsers(minutes)</span>
+}
+
+// GetAllUsers возвращает всех пользователей (только для админов)
+func (m *Middleware) GetAllUsers(userID int64) ([]*database.User, error) <span class="cov8" title="1">{
+        if !m.RequireAdmin(userID) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("access denied: admin privileges required")
+        }</span>
+        <span class="cov8" title="1">return m.db.GetAllUsers()</span>
+}
+
+// SetUserAdmin sets admin privileges for a user (admin only)
+func (m *Middleware) SetUserAdmin(adminID int64, userID int64, isAdmin bool) error <span class="cov8" title="1">{
+        if !m.RequireAdmin(adminID) </span><span class="cov8" title="1">{
+                return fmt.Errorf("access denied: admin privileges required")
+        }</span>
+
+        // Prevent removing admin from the last admin
+        <span class="cov8" title="1">if !isAdmin </span><span class="cov8" title="1">{
+                admins, err := m.getAdminUsers()
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if len(admins) &lt;= 1 </span><span class="cov8" title="1">{
+                        return fmt.Errorf("cannot remove admin privileges: at least one admin must remain")
+                }</span>
+        }
+
+        <span class="cov8" title="1">return m.db.SetUserAdmin(userID, isAdmin)</span>
+}
+
+// SetUserActive activates/deactivates a user (admin only)
+func (m *Middleware) SetUserActive(adminID int64, userID int64, isActive bool) error <span class="cov8" title="1">{
+        if !m.RequireAdmin(adminID) </span><span class="cov0" title="0">{
+                return fmt.Errorf("access denied: admin privileges required")
+        }</span>
+
+        // Prevent deactivating the last admin
+        <span class="cov8" title="1">if !isActive </span><span class="cov8" title="1">{
+                user, err := m.db.GetUser(userID)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov8" title="1">if user.IsAdmin </span><span class="cov8" title="1">{
+                        admins, err := m.getActiveAdminUsers()
+                        if err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                        <span class="cov8" title="1">if len(admins) &lt;= 1 </span><span class="cov8" title="1">{
+                                return fmt.Errorf("cannot deactivate the last active admin")
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">return m.db.SetUserActive(userID, isActive)</span>
+}
+
+// DeleteUser removes a user (admin only)
+func (m *Middleware) DeleteUser(adminID int64, userID int64) error <span class="cov8" title="1">{
+        if !m.RequireAdmin(adminID) </span><span class="cov0" title="0">{
+                return fmt.Errorf("access denied: admin privileges required")
+        }</span>
+
+        // Prevent deleting admin users
+        <span class="cov8" title="1">user, err := m.db.GetUser(userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">if user.IsAdmin </span><span class="cov8" title="1">{
+                return fmt.Errorf("cannot delete admin user: remove admin privileges first")
+        }</span>
+
+        <span class="cov8" title="1">return m.db.DeleteUser(userID)</span>
+}
+
+// GetUsersByStatus gets users by status (admin only)
+func (m *Middleware) GetUsersByStatus(adminID int64, isActive bool) ([]*database.User, error) <span class="cov8" title="1">{
+        if !m.RequireAdmin(adminID) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("access denied: admin privileges required")
+        }</span>
+        <span class="cov8" title="1">return m.db.GetUsersByStatus(isActive)</span>
+}
+
+// Helper methods
+func (m *Middleware) getAdminUsers() ([]*database.User, error) <span class="cov8" title="1">{
+        users, err := m.db.GetAllUsers()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var admins []*database.User
+        for _, user := range users </span><span class="cov8" title="1">{
+                if user.IsAdmin </span><span class="cov8" title="1">{
+                        admins = append(admins, user)
+                }</span>
+        }
+        <span class="cov8" title="1">return admins, nil</span>
+}
+
+func (m *Middleware) getActiveAdminUsers() ([]*database.User, error) <span class="cov8" title="1">{
+        users, err := m.db.GetAllUsers()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var admins []*database.User
+        for _, user := range users </span><span class="cov8" title="1">{
+                if user.IsAdmin &amp;&amp; user.IsActive </span><span class="cov8" title="1">{
+                        admins = append(admins, user)
+                }</span>
+        }
+        <span class="cov8" title="1">return admins, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package bot
+
+import (
+        "fmt"
+        "log"
+        "strings"
+        "time"
+
+        "github.com/cupbot/cupbot/internal/auth"
+        "github.com/cupbot/cupbot/internal/config"
+        "github.com/cupbot/cupbot/internal/database"
+        "github.com/cupbot/cupbot/internal/events"
+        "github.com/cupbot/cupbot/internal/filemanager"
+        "github.com/cupbot/cupbot/internal/power"
+        "github.com/cupbot/cupbot/internal/screenshot"
+        "github.com/cupbot/cupbot/internal/system"
+        tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+)
+
+// Bot представляет Telegram бота
+type Bot struct {
+        api               *tgbotapi.BotAPI
+        config            *config.Config
+        db                *database.DB
+        authMw            *auth.Middleware
+        systemService     *system.Service
+        fileManager       *filemanager.Service
+        screenshotService *screenshot.Service
+        eventsService     *events.Service
+        powerService      *power.Service
+}
+
+// New создает новый экземпляр бота
+func New(cfg *config.Config, db *database.DB) (*Bot, error) <span class="cov0" title="0">{
+        api, err := tgbotapi.NewBotAPI(cfg.Bot.Token)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create bot API: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">api.Debug = cfg.Bot.Debug
+
+        bot := &amp;Bot{
+                api:               api,
+                config:            cfg,
+                db:                db,
+                authMw:            auth.NewMiddleware(cfg, db),
+                systemService:     system.NewService(),
+                fileManager:       filemanager.NewService(cfg),
+                screenshotService: screenshot.NewService(cfg),
+                eventsService:     events.NewService(cfg),
+                powerService:      power.NewService(cfg),
+        }
+
+        log.Printf("Authorized on account %s", api.Self.UserName)
+        return bot, nil</span>
+}
+
+// Start запускает бота
+func (b *Bot) Start() error <span class="cov0" title="0">{
+        // Start events monitoring
+        if err := b.eventsService.Start(); err != nil </span><span class="cov0" title="0">{
+                log.Printf("Warning: Failed to start events service: %v", err)
+        }</span>
+
+        <span class="cov0" title="0">u := tgbotapi.NewUpdate(0)
+        u.Timeout = 60
+
+        updates := b.api.GetUpdatesChan(u)
+
+        log.Println("Bot started. Waiting for messages...")
+
+        for update := range updates </span><span class="cov0" title="0">{
+                go b.handleUpdate(update)
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// Stop останавливает бота
+func (b *Bot) Stop() <span class="cov0" title="0">{
+        b.api.StopReceivingUpdates()
+        b.eventsService.Stop()
+        log.Println("Bot stopped")
+}</span>
+
+// handleUpdate обрабатывает входящие обновления
+func (b *Bot) handleUpdate(update tgbotapi.Update) <span class="cov0" title="0">{
+        // Авторизация пользователя
+        authorized, user := b.authMw.AuthorizeUser(update)
+        if !authorized </span><span class="cov0" title="0">{
+                b.sendUnauthorizedMessage(update)
+                return
+        }</span>
+
+        <span class="cov0" title="0">if update.Message != nil </span><span class="cov0" title="0">{
+                b.handleMessage(update.Message, user)
+        }</span> else<span class="cov0" title="0"> if update.CallbackQuery != nil </span><span class="cov0" title="0">{
+                b.handleCallbackQuery(update.CallbackQuery, user)
+        }</span>
+}
+
+// handleMessage обрабатывает текстовые сообщения
+func (b *Bot) handleMessage(message *tgbotapi.Message, user *database.User) <span class="cov0" title="0">{
+        if !message.IsCommand() </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov0" title="0">command := message.Command()
+        args := message.CommandArguments()
+
+        log.Printf("User %d (%s) executed command: %s %s", user.ID, user.Username, command, args)
+
+        var response string
+        var success bool
+
+        switch command </span>{
+        case "start":<span class="cov0" title="0">
+                response, success = b.handleStart(message, user)</span>
+        case "help", "menu":<span class="cov0" title="0">
+                response, success = b.handleHelp(message, user)</span>
+        case "status":<span class="cov0" title="0">
+                response, success = b.handleStatusInternal(user)</span>
+        case "uptime":<span class="cov0" title="0">
+                response, success = b.handleUptimeInternal(user)</span>
+        case "history":<span class="cov0" title="0">
+                response, success = b.handleHistoryInternal(user, args)</span>
+        case "users":<span class="cov0" title="0">
+                response, success = b.handleUsersInternal(user)</span>
+        case "stats":<span class="cov0" title="0">
+                response, success = b.handleStatsInternal(user)</span>
+        case "cleanup":<span class="cov0" title="0">
+                response, success = b.handleCleanup(message, user, args)</span>
+        case "addadmin":<span class="cov0" title="0">
+                response, success = b.handleAddAdmin(message, user, args)</span>
+        case "removeadmin":<span class="cov0" title="0">
+                response, success = b.handleRemoveAdmin(message, user, args)</span>
+        case "banuser":<span class="cov0" title="0">
+                response, success = b.handleBanUser(message, user, args)</span>
+        case "unbanuser":<span class="cov0" title="0">
+                response, success = b.handleUnbanUser(message, user, args)</span>
+        case "deleteuser":<span class="cov0" title="0">
+                response, success = b.handleDeleteUser(message, user, args)</span>
+        case "files":<span class="cov0" title="0">
+                response, success = b.handleFiles(message, user, args)</span>
+        case "screenshot":<span class="cov0" title="0">
+                response, success = b.handleScreenshot(message, user, args)</span>
+        default:<span class="cov0" title="0">
+                response = fmt.Sprintf("Неизвестная команда: %s\nИспользуйте /help для просмотра доступных команд", command)
+                success = false</span>
+        }
+
+        // Отправляем ответ
+        <span class="cov0" title="0">if response != "" </span><span class="cov0" title="0">{
+                msg := tgbotapi.NewMessage(message.Chat.ID, response)
+                msg.ParseMode = tgbotapi.ModeMarkdown
+
+                // Добавляем кнопку меню после каждого ответа (кроме start)
+                if command != "start" </span><span class="cov0" title="0">{
+                        msg.ReplyMarkup = b.getMenuKeyboard()
+                }</span>
+
+                // Для команд help и menu показываем полную клавиатуру
+                <span class="cov0" title="0">if command == "help" || command == "menu" </span><span class="cov0" title="0">{
+                        msg.ReplyMarkup = b.getMainKeyboard(user.IsAdmin)
+                }</span>
+
+                <span class="cov0" title="0">if _, err := b.api.Send(msg); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Failed to send message: %v", err)
+                }</span>
+        }
+
+        // Записываем в историю
+        <span class="cov0" title="0">b.authMw.LogCommand(user.ID, command, args, success, response)</span>
+}
+
+// handleCallbackQuery обрабатывает callback запросы
+func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery, user *database.User) <span class="cov0" title="0">{
+        // Отвечаем на callback
+        callbackResponse := tgbotapi.NewCallback(callback.ID, "")
+        b.api.Request(callbackResponse)
+
+        var response string
+        var success bool
+
+        // Обрабатываем каллбэк данные
+        switch </span>{
+        // Basic commands
+        case callback.Data == "status":<span class="cov0" title="0">
+                response, success = b.handleStatusCallback(user)</span>
+        case callback.Data == "uptime":<span class="cov0" title="0">
+                response, success = b.handleUptimeCallback(user)</span>
+        case callback.Data == "history":<span class="cov0" title="0">
+                response, success = b.handleHistoryCallback(user)</span>
+        case callback.Data == "users":<span class="cov0" title="0">
+                response, success = b.handleUsersCallback(user)</span>
+        case callback.Data == "stats":<span class="cov0" title="0">
+                response, success = b.handleStatsCallback(user)</span>
+        case callback.Data == "files":<span class="cov0" title="0">
+                response, success = b.handleFilesCallback(user)</span>
+        case callback.Data == "screenshot":<span class="cov0" title="0">
+                response, success = b.handleScreenshotCallback(user)</span>
+        case callback.Data == "events":<span class="cov0" title="0">
+                response, success = b.handleEventsCallback(user)</span>
+
+        // Menu navigation
+        case callback.Data == "admin_menu":<span class="cov0" title="0">
+                response, success = b.handleAdminMenuCallback(user)</span>
+        case callback.Data == "main_menu":<span class="cov0" title="0">
+                response, success = b.handleMainMenuCallback(user)</span>
+        case callback.Data == "menu":<span class="cov0" title="0">
+                response, success = b.handleMenuCallback(user)</span>
+
+        // Power management
+        case callback.Data == "power_menu":<span class="cov0" title="0">
+                response, success = b.handlePowerMenuCallback(user)</span>
+        case callback.Data == "shutdown_now":<span class="cov0" title="0">
+                response, success = b.handleShutdownNowCallback(user)</span>
+        case callback.Data == "shutdown_1min":<span class="cov0" title="0">
+                response, success = b.handleShutdownDelayCallback(user, 1*time.Minute, false)</span>
+        case callback.Data == "shutdown_5min":<span class="cov0" title="0">
+                response, success = b.handleShutdownDelayCallback(user, 5*time.Minute, false)</span>
+        case callback.Data == "shutdown_10min":<span class="cov0" title="0">
+                response, success = b.handleShutdownDelayCallback(user, 10*time.Minute, false)</span>
+        case callback.Data == "shutdown_30min":<span class="cov0" title="0">
+                response, success = b.handleShutdownDelayCallback(user, 30*time.Minute, false)</span>
+        case callback.Data == "reboot_now":<span class="cov0" title="0">
+                response, success = b.handleRebootNowCallback(user)</span>
+        case callback.Data == "reboot_1min":<span class="cov0" title="0">
+                response, success = b.handleRebootDelayCallback(user, 1*time.Minute, false)</span>
+        case callback.Data == "reboot_5min":<span class="cov0" title="0">
+                response, success = b.handleRebootDelayCallback(user, 5*time.Minute, false)</span>
+        case callback.Data == "reboot_10min":<span class="cov0" title="0">
+                response, success = b.handleRebootDelayCallback(user, 10*time.Minute, false)</span>
+        case callback.Data == "reboot_30min":<span class="cov0" title="0">
+                response, success = b.handleRebootDelayCallback(user, 30*time.Minute, false)</span>
+        case callback.Data == "force_shutdown":<span class="cov0" title="0">
+                response, success = b.handleShutdownDelayCallback(user, 0, true)</span>
+        case callback.Data == "force_reboot":<span class="cov0" title="0">
+                response, success = b.handleRebootDelayCallback(user, 0, true)</span>
+        case callback.Data == "cancel_power":<span class="cov0" title="0">
+                response, success = b.handleCancelPowerCallback(user)</span>
+        case callback.Data == "power_status":<span class="cov0" title="0">
+                response, success = b.handlePowerStatusCallback(user)</span>
+
+        // User management
+        case callback.Data == "user_menu":<span class="cov0" title="0">
+                response, success = b.handleUserMenuCallback(user)</span>
+        case callback.Data == "add_admin_menu":<span class="cov0" title="0">
+                response, success = b.handleAddAdminMenuCallback(user)</span>
+        case callback.Data == "remove_admin_menu":<span class="cov0" title="0">
+                response, success = b.handleRemoveAdminMenuCallback(user)</span>
+        case callback.Data == "ban_user_menu":<span class="cov0" title="0">
+                response, success = b.handleBanUserMenuCallback(user)</span>
+        case callback.Data == "unban_user_menu":<span class="cov0" title="0">
+                response, success = b.handleUnbanUserMenuCallback(user)</span>
+        case callback.Data == "delete_user_menu":<span class="cov0" title="0">
+                response, success = b.handleDeleteUserMenuCallback(user)</span>
+        case callback.Data == "list_users":<span class="cov0" title="0">
+                response, success = b.handleListUsersCallback(user)</span>
+
+        // Enhanced services
+        case callback.Data == "file_manager_admin":<span class="cov0" title="0">
+                response, success = b.handleFileManagerAdminCallback(user)</span>
+        case callback.Data == "screenshot_admin":<span class="cov0" title="0">
+                response, success = b.handleScreenshotAdminCallback(user)</span>
+        case callback.Data == "system_tools":<span class="cov0" title="0">
+                response, success = b.handleSystemToolsCallback(user)</span>
+
+        default:<span class="cov0" title="0">
+                response = "Неизвестная команда"
+                success = false</span>
+        }
+
+        // Отправляем ответ
+        <span class="cov0" title="0">if response != "" </span><span class="cov0" title="0">{
+                msg := tgbotapi.NewMessage(callback.Message.Chat.ID, response)
+                msg.ParseMode = tgbotapi.ModeMarkdown
+
+                // Добавляем кнопку меню после каждого callback ответа
+                if !isMenuCallback(callback.Data) &amp;&amp; !isPowerCallback(callback.Data) &amp;&amp; !isUserManagementCallback(callback.Data) </span><span class="cov0" title="0">{
+                        msg.ReplyMarkup = b.getMenuKeyboard()
+                }</span>
+
+                // Для меню показываем соответствующую клавиатуру
+                <span class="cov0" title="0">switch callback.Data </span>{
+                case "main_menu", "menu":<span class="cov0" title="0">
+                        msg.ReplyMarkup = b.getMainKeyboard(user.IsAdmin)</span>
+                case "admin_menu":<span class="cov0" title="0">
+                        msg.ReplyMarkup = b.getAdminKeyboard()</span>
+                case "power_menu":<span class="cov0" title="0">
+                        msg.ReplyMarkup = b.getPowerMenuKeyboard()</span>
+                case "user_menu":<span class="cov0" title="0">
+                        msg.ReplyMarkup = b.getUserManagementKeyboard()</span>
+                case "file_manager_admin":<span class="cov0" title="0">
+                        msg.ReplyMarkup = b.getFileManagerKeyboard()</span>
+                case "system_tools":<span class="cov0" title="0">
+                        msg.ReplyMarkup = b.getSystemToolsKeyboard()</span>
+                }
+
+                <span class="cov0" title="0">if _, err := b.api.Send(msg); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Failed to send callback response: %v", err)
+                }</span>
+        }
+
+        // Записываем в историю
+        <span class="cov0" title="0">b.authMw.LogCommand(user.ID, "callback:"+callback.Data, "", success, response)
+
+        log.Printf("Callback from user %d: %s", user.ID, callback.Data)</span>
+}
+
+// sendUnauthorizedMessage отправляет сообщение о недостатке прав
+func (b *Bot) sendUnauthorizedMessage(update tgbotapi.Update) <span class="cov0" title="0">{
+        var chatID int64
+        if update.Message != nil </span><span class="cov0" title="0">{
+                chatID = update.Message.Chat.ID
+        }</span> else<span class="cov0" title="0"> if update.CallbackQuery != nil </span><span class="cov0" title="0">{
+                chatID = update.CallbackQuery.Message.Chat.ID
+        }</span> else<span class="cov0" title="0"> {
+                return
+        }</span>
+
+        <span class="cov0" title="0">msg := tgbotapi.NewMessage(chatID, "❌ У вас нет прав для использования этого бота.")
+        b.api.Send(msg)</span>
+}
+
+// handleStart обрабатывает команду /start
+func (b *Bot) handleStart(message *tgbotapi.Message, user *database.User) (string, bool) <span class="cov0" title="0">{
+        welcome := fmt.Sprintf(`🤖 *Добро пожаловать в CupBot!*
+
+Привет, %s! Этот бот позволяет удаленно управлять компьютером.
+
+📊 *Основные возможности:*
+• Просмотр статуса системы
+• Мониторинг времени работы
+• Просмотр истории команд`, user.FirstName)
+
+        if user.IsAdmin </span><span class="cov0" title="0">{
+                welcome += `
+
+🔑 *Вы — администратор!*
+• Управление пользователями
+• Просмотр статистики
+• Очистка данных`
+        }</span>
+
+        <span class="cov0" title="0">welcome += `
+
+📱 *Используйте кнопки ниже для управления:*`
+
+        // Отправляем сообщение с клавиатурой
+        msg := tgbotapi.NewMessage(message.Chat.ID, welcome)
+        msg.ParseMode = tgbotapi.ModeMarkdown
+        msg.ReplyMarkup = b.getMainKeyboard(user.IsAdmin)
+        b.api.Send(msg)
+
+        return "", true</span> // Пустой ответ, так как мы уже отправили сообщение
+}
+
+// handleHelp обрабатывает команду /help
+func (b *Bot) handleHelp(message *tgbotapi.Message, user *database.User) (string, bool) <span class="cov8" title="1">{
+        help := `📖 *Справка по командам*
+
+*Основные команды:*
+/start - Начать работу с ботом
+/help - Показать эту справку
+/status - Полный статус системы
+/uptime - Время работы системы
+/history [N] - История команд (по умолчанию 10)
+/files [путь] - Файловый менеджер
+/screenshot - Создать скриншот рабочего стола`
+
+        if user.IsAdmin </span><span class="cov8" title="1">{
+                help += `
+
+*Команды администратора:*
+/users - Список всех пользователей
+/stats - Статистика использования бота
+/cleanup [дни] - Очистка истории старше N дней (по умолчанию 30)
+/addadmin [ID] - Назначить администратора
+/removeadmin [ID] - Убрать права администратора
+/banuser [ID] - Заблокировать пользователя
+/unbanuser [ID] - Разблокировать пользователя
+/deleteuser [ID] - Удалить пользователя`
+        }</span>
+
+        <span class="cov8" title="1">help += `
+
+*Информация:*
+• Все команды записываются в историю
+• Только авторизованные пользователи могут использовать бота
+• Администраторы имеют расширенный доступ`
+
+        return help, true</span>
+}
+
+// handleStatus обрабатывает команду /status
+func (b *Bot) handleStatus(message *tgbotapi.Message, user *database.User) (string, bool) <span class="cov0" title="0">{
+        sysInfo, err := b.systemService.GetSystemInfo()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка получения информации о системе: %v", err), false
+        }</span>
+
+        <span class="cov0" title="0">response := "💻 *Статус системы*\n\n"
+
+        // Основная информация
+        response += fmt.Sprintf("🖥️ *Хост:* %s\n", sysInfo.Hostname)
+        response += fmt.Sprintf("🔧 *ОС:* %s %s\n", sysInfo.OS, sysInfo.Platform)
+        response += fmt.Sprintf("⏰ *Время работы:* %s\n", formatDuration(sysInfo.Uptime))
+        response += fmt.Sprintf("🔄 *Процессов:* %d\n\n", sysInfo.ProcessCount)
+
+        // Информация о CPU
+        response += "🧠 *Процессор:*\n"
+        response += fmt.Sprintf("   • Модель: %s\n", sysInfo.CPUInfo.ModelName)
+        response += fmt.Sprintf("   • Ядер: %d\n", sysInfo.CPUInfo.Cores)
+        if len(sysInfo.CPUInfo.Usage) &gt; 0 </span><span class="cov0" title="0">{
+                avgUsage := 0.0
+                for _, usage := range sysInfo.CPUInfo.Usage </span><span class="cov0" title="0">{
+                        avgUsage += usage
+                }</span>
+                <span class="cov0" title="0">avgUsage /= float64(len(sysInfo.CPUInfo.Usage))
+                response += fmt.Sprintf("   • Загрузка: %.1f%%\n", avgUsage)</span>
+        }
+        <span class="cov0" title="0">if sysInfo.CPUInfo.Temperature &gt; 0 </span><span class="cov0" title="0">{
+                response += fmt.Sprintf("   • Температура: %.1f°C\n", sysInfo.CPUInfo.Temperature)
+        }</span>
+        <span class="cov0" title="0">response += "\n"
+
+        // Информация о памяти
+        response += "🧮 *Память:*\n"
+        response += fmt.Sprintf("   • Всего: %s\n", system.FormatBytes(sysInfo.MemoryInfo.Total))
+        response += fmt.Sprintf("   • Используется: %s (%.1f%%)\n",
+                system.FormatBytes(sysInfo.MemoryInfo.Used), sysInfo.MemoryInfo.UsedPercent)
+        response += fmt.Sprintf("   • Доступно: %s\n\n", system.FormatBytes(sysInfo.MemoryInfo.Available))
+
+        // Информация о дисках
+        response += "💾 *Диски:*\n"
+        for _, disk := range sysInfo.DiskInfo </span><span class="cov0" title="0">{
+                if disk.Total &gt; 0 </span><span class="cov0" title="0">{
+                        response += fmt.Sprintf("   • %s (%s)\n", disk.Device, disk.Fstype)
+                        response += fmt.Sprintf("     Всего: %s | Свободно: %s (%.1f%%)\n",
+                                system.FormatBytes(disk.Total), system.FormatBytes(disk.Free), 100-disk.UsedPercent)
+                }</span>
+        }
+
+        // Сетевая статистика (показываем только активные интерфейсы)
+        <span class="cov0" title="0">activeInterfaces := 0
+        for _, net := range sysInfo.NetworkInfo </span><span class="cov0" title="0">{
+                if net.BytesSent &gt; 0 || net.BytesRecv &gt; 0 </span><span class="cov0" title="0">{
+                        activeInterfaces++
+                }</span>
+        }
+
+        <span class="cov0" title="0">if activeInterfaces &gt; 0 </span><span class="cov0" title="0">{
+                response += "\n🌐 *Сеть (активные интерфейсы):*\n"
+                for _, net := range sysInfo.NetworkInfo </span><span class="cov0" title="0">{
+                        if net.BytesSent &gt; 0 || net.BytesRecv &gt; 0 </span><span class="cov0" title="0">{
+                                response += fmt.Sprintf("   • %s\n", net.Name)
+                                response += fmt.Sprintf("     Отправлено: %s | Получено: %s\n",
+                                        system.FormatBytes(net.BytesSent), system.FormatBytes(net.BytesRecv))
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">return response, true</span>
+}
+func (b *Bot) handleUptime(message *tgbotapi.Message, user *database.User) (string, bool) <span class="cov8" title="1">{
+        return b.handleUptimeInternal(user)
+}</span>
+
+func (b *Bot) handleUptimeInternal(user *database.User) (string, bool) <span class="cov8" title="1">{
+        uptime, err := b.systemService.GetUptime()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка получения времени работы: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("⏰ *Время работы системы:* %s", formatDuration(uptime)), true</span>
+}
+
+// handleHistory обрабатывает команду /history
+func (b *Bot) handleHistory(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov8" title="1">{
+        limit := 10
+        if args != "" </span><span class="cov8" title="1">{
+                if n, err := parseLimit(args); err == nil &amp;&amp; n &gt; 0 &amp;&amp; n &lt;= 50 </span><span class="cov8" title="1">{
+                        limit = n
+                }</span>
+        }
+
+        <span class="cov8" title="1">history, err := b.authMw.GetUserHistory(user.ID, limit)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка получения истории: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">if len(history) == 0 </span><span class="cov0" title="0">{
+                return "📝 История команд пуста", true
+        }</span>
+
+        <span class="cov8" title="1">response := fmt.Sprintf("📝 *История команд* (последние %d):\n\n", len(history))
+        for i, cmd := range history </span><span class="cov8" title="1">{
+                status := "✅"
+                if !cmd.Success </span><span class="cov0" title="0">{
+                        status = "❌"
+                }</span>
+                <span class="cov8" title="1">response += fmt.Sprintf("%d. %s `/%s %s`\n   _Время: %s_\n\n",
+                        i+1, status, cmd.Command, cmd.Arguments, cmd.ExecutedAt.Format("02.01.2006 15:04:05"))</span>
+        }
+
+        <span class="cov8" title="1">return response, true</span>
+}
+
+// handleUsers обрабатывает команду /users (только админы)
+func (b *Bot) handleUsers(message *tgbotapi.Message, user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov8" title="1">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">users, err := b.authMw.GetAllUsers(user.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка получения списка пользователей: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">if len(users) == 0 </span><span class="cov0" title="0">{
+                return "👥 Список пользователей пуст", true
+        }</span>
+
+        <span class="cov8" title="1">response := "👥 *Список пользователей:*\n\n"
+        for i, u := range users </span><span class="cov8" title="1">{
+                status := "🟢"
+                if !u.IsActive </span><span class="cov0" title="0">{
+                        status = "🔴"
+                }</span>
+                <span class="cov8" title="1">role := "Пользователь"
+                if u.IsAdmin </span><span class="cov8" title="1">{
+                        role = "Администратор"
+                }</span>
+                <span class="cov8" title="1">response += fmt.Sprintf("%d. %s *%s %s* (@%s)\n   ID: %d | %s\n   Создан: %s\n\n",
+                        i+1, status, u.FirstName, u.LastName, u.Username, u.ID, role,
+                        u.CreatedAt.Format("02.01.2006 15:04"))</span>
+        }
+
+        <span class="cov8" title="1">return response, true</span>
+}
+
+// handleStats обрабатывает команду /stats (только админы)
+func (b *Bot) handleStats(message *tgbotapi.Message, user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov8" title="1">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">stats, err := b.authMw.GetStats(user.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка получения статистики: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">response := "📊 *Статистика использования:*\n\n"
+        response += fmt.Sprintf("👥 Всего пользователей: %v\n", stats["total_users"])
+        response += fmt.Sprintf("🟢 Активных пользователей: %v\n", stats["active_users"])
+        response += fmt.Sprintf("📝 Всего команд: %v\n", stats["total_commands"])
+        response += fmt.Sprintf("✅ Успешных команд: %v\n", stats["successful_commands"])
+        response += fmt.Sprintf("🕐 Команд за 24 часа: %v\n", stats["recent_commands"])
+
+        // Добавляем процент успешности
+        if total := stats["total_commands"].(int); total &gt; 0 </span><span class="cov0" title="0">{
+                successful := stats["successful_commands"].(int)
+                successRate := float64(successful) * 100 / float64(total)
+                response += fmt.Sprintf("📈 Процент успешности: %.1f%%", successRate)
+        }</span>
+
+        <span class="cov8" title="1">return response, true</span>
+}
+
+// handleCleanup обрабатывает команду /cleanup (только админы)
+func (b *Bot) handleCleanup(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov8" title="1">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">days := 30
+        if args != "" </span><span class="cov8" title="1">{
+                if n, err := parseLimit(args); err == nil &amp;&amp; n &gt; 0 &amp;&amp; n &lt;= 365 </span><span class="cov8" title="1">{
+                        days = n
+                }</span>
+        }
+
+        <span class="cov8" title="1">err := b.authMw.CleanupOldData(user.ID, days)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка очистки данных: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("🧹 Очистка завершена. Удалены записи старше %d дней.", days), true</span>
+}
+
+// Вспомогательные функции
+
+// formatDuration форматирует продолжительность в читаемый вид
+func formatDuration(d time.Duration) string <span class="cov8" title="1">{
+        days := int(d.Hours()) / 24
+        hours := int(d.Hours()) % 24
+        minutes := int(d.Minutes()) % 60
+
+        if days &gt; 0 </span><span class="cov8" title="1">{
+                return fmt.Sprintf("%d дн. %d ч. %d мин.", days, hours, minutes)
+        }</span>
+        <span class="cov8" title="1">if hours &gt; 0 </span><span class="cov8" title="1">{
+                return fmt.Sprintf("%d ч. %d мин.", hours, minutes)
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%d мин.", minutes)</span>
+}
+
+// parseLimit парсит строку в число
+func parseLimit(s string) (int, error) <span class="cov8" title="1">{
+        var n int
+        _, err := fmt.Sscanf(strings.TrimSpace(s), "%d", &amp;n)
+        return n, err
+}</span>
+
+// handleAddAdmin обрабатывает команду /addadmin (только админы)
+func (b *Bot) handleAddAdmin(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">if args == "" </span><span class="cov8" title="1">{
+                return "❌ Необходимо указать ID пользователя. Пример: /addadmin 123456789", false
+        }</span>
+
+        <span class="cov8" title="1">userID, err := parseUserID(args)
+        if err != nil </span><span class="cov8" title="1">{
+                return "❌ Неверный ID пользователя", false
+        }</span>
+
+        <span class="cov8" title="1">err = b.authMw.SetUserAdmin(user.ID, userID, true)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("✅ Пользователь %d назначен администратором", userID), true</span>
+}
+
+// handleRemoveAdmin обрабатывает команду /removeadmin (только админы)
+func (b *Bot) handleRemoveAdmin(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">if args == "" </span><span class="cov0" title="0">{
+                return "❌ Необходимо указать ID пользователя. Пример: /removeadmin 123456789", false
+        }</span>
+
+        <span class="cov8" title="1">userID, err := parseUserID(args)
+        if err != nil </span><span class="cov0" title="0">{
+                return "❌ Неверный ID пользователя", false
+        }</span>
+
+        <span class="cov8" title="1">if userID == user.ID </span><span class="cov8" title="1">{
+                return "❌ Нельзя убрать права администратора у себя", false
+        }</span>
+
+        <span class="cov8" title="1">err = b.authMw.SetUserAdmin(user.ID, userID, false)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("✅ Права администратора у пользователя %d убраны", userID), true</span>
+}
+
+// handleBanUser обрабатывает команду /banuser (только админы)
+func (b *Bot) handleBanUser(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">if args == "" </span><span class="cov0" title="0">{
+                return "❌ Необходимо указать ID пользователя. Пример: /banuser 123456789", false
+        }</span>
+
+        <span class="cov8" title="1">userID, err := parseUserID(args)
+        if err != nil </span><span class="cov0" title="0">{
+                return "❌ Неверный ID пользователя", false
+        }</span>
+
+        <span class="cov8" title="1">if userID == user.ID </span><span class="cov8" title="1">{
+                return "❌ Нельзя заблокировать себя", false
+        }</span>
+
+        <span class="cov8" title="1">err = b.authMw.SetUserActive(user.ID, userID, false)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("✅ Пользователь %d заблокирован", userID), true</span>
+}
+
+// handleUnbanUser обрабатывает команду /unbanuser (только админы)
+func (b *Bot) handleUnbanUser(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">if args == "" </span><span class="cov0" title="0">{
+                return "❌ Необходимо указать ID пользователя. Пример: /unbanuser 123456789", false
+        }</span>
+
+        <span class="cov8" title="1">userID, err := parseUserID(args)
+        if err != nil </span><span class="cov0" title="0">{
+                return "❌ Неверный ID пользователя", false
+        }</span>
+
+        <span class="cov8" title="1">err = b.authMw.SetUserActive(user.ID, userID, true)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("✅ Пользователь %d разблокирован", userID), true</span>
+}
+
+// handleDeleteUser обрабатывает команду /deleteuser (только админы)
+func (b *Bot) handleDeleteUser(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Доступ запрещен. Требуются права администратора.", false
+        }</span>
+
+        <span class="cov8" title="1">if args == "" </span><span class="cov0" title="0">{
+                return "❌ Необходимо указать ID пользователя. Пример: /deleteuser 123456789", false
+        }</span>
+
+        <span class="cov8" title="1">userID, err := parseUserID(args)
+        if err != nil </span><span class="cov0" title="0">{
+                return "❌ Неверный ID пользователя", false
+        }</span>
+
+        <span class="cov8" title="1">if userID == user.ID </span><span class="cov8" title="1">{
+                return "❌ Нельзя удалить себя", false
+        }</span>
+
+        <span class="cov8" title="1">err = b.authMw.DeleteUser(user.ID, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Ошибка: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("✅ Пользователь %d удален", userID), true</span>
+}
+
+// parseUserID парсит ID пользователя из строки
+func parseUserID(s string) (int64, error) <span class="cov8" title="1">{
+        var userID int64
+        _, err := fmt.Sscanf(strings.TrimSpace(s), "%d", &amp;userID)
+        return userID, err
+}</span>
+
+// getMainKeyboard returns the main keyboard
+func (b *Bot) getMainKeyboard(isAdmin bool) tgbotapi.InlineKeyboardMarkup <span class="cov8" title="1">{
+        var rows [][]tgbotapi.InlineKeyboardButton
+
+        // Basic buttons
+        rows = append(rows, []tgbotapi.InlineKeyboardButton{
+                tgbotapi.NewInlineKeyboardButtonData("💻 System Status", "status"),
+                tgbotapi.NewInlineKeyboardButtonData("⏰ Uptime", "uptime"),
+        })
+
+        rows = append(rows, []tgbotapi.InlineKeyboardButton{
+                tgbotapi.NewInlineKeyboardButtonData("📝 Command History", "history"),
+                tgbotapi.NewInlineKeyboardButtonData("📁 File Manager", "files"),
+        })
+
+        rows = append(rows, []tgbotapi.InlineKeyboardButton{
+                tgbotapi.NewInlineKeyboardButtonData("📸 Screenshot", "screenshot"),
+                tgbotapi.NewInlineKeyboardButtonData("🔔 Events", "events"),
+        })
+
+        // Admin buttons
+        if isAdmin </span><span class="cov8" title="1">{
+                rows = append(rows, []tgbotapi.InlineKeyboardButton{
+                        tgbotapi.NewInlineKeyboardButtonData("👥 Users", "users"),
+                        tgbotapi.NewInlineKeyboardButtonData("📊 Statistics", "stats"),
+                })
+                rows = append(rows, []tgbotapi.InlineKeyboardButton{
+                        tgbotapi.NewInlineKeyboardButtonData("🔑 Admin Menu", "admin_menu"),
+                })
+        }</span>
+
+        <span class="cov8" title="1">return tgbotapi.NewInlineKeyboardMarkup(rows...)</span>
+}
+
+// Callback handlers
+func (b *Bot) handleStatusCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleStatusInternal(user)
+}</span>
+
+func (b *Bot) handleUptimeCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleUptimeInternal(user)
+}</span>
+
+func (b *Bot) handleHistoryCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleHistoryInternal(user, "")
+}</span>
+
+func (b *Bot) handleUsersCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleUsersInternal(user)
+}</span>
+
+func (b *Bot) handleStatsCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleStatsInternal(user)
+}</span>
+
+func (b *Bot) handleAdminMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov8" title="1">{
+                return "❌ Access denied", false
+        }</span>
+        <span class="cov8" title="1">return "🔑 *Admin Menu*\n\nSelect an action:", true</span>
+}
+
+func (b *Bot) handleMainMenuCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return fmt.Sprintf("🏠 *Main Menu*\n\nHello, %s! Choose an action:", user.FirstName), true
+}</span>
+
+// Missing internal handler methods
+func (b *Bot) handleStatusInternal(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleStatus(nil, user)
+}</span>
+
+func (b *Bot) handleHistoryInternal(user *database.User, args string) (string, bool) <span class="cov0" title="0">{
+        return b.handleHistory(nil, user, args)
+}</span>
+
+func (b *Bot) handleUsersInternal(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleUsers(nil, user)
+}</span>
+
+func (b *Bot) handleStatsInternal(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleStats(nil, user)
+}</span>
+
+// getAdminKeyboard returns admin-specific keyboard
+func (b *Bot) getAdminKeyboard() tgbotapi.InlineKeyboardMarkup <span class="cov8" title="1">{
+        rows := [][]tgbotapi.InlineKeyboardButton{
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🔌 Power Management", "power_menu"),
+                        tgbotapi.NewInlineKeyboardButtonData("👥 User Management", "user_menu"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("📁 File Manager+", "file_manager_admin"),
+                        tgbotapi.NewInlineKeyboardButtonData("📸 Screenshot+", "screenshot_admin"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("💻 System Monitoring", "status"),
+                        tgbotapi.NewInlineKeyboardButtonData("🔧 System Tools", "system_tools"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🏠 Main Menu", "main_menu"),
+                },
+        }
+        return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}</span>
+
+// getMenuKeyboard returns simple menu button
+func (b *Bot) getMenuKeyboard() tgbotapi.InlineKeyboardMarkup <span class="cov0" title="0">{
+        rows := [][]tgbotapi.InlineKeyboardButton{
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("📜 Menu", "menu"),
+                },
+        }
+        return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}</span>
+
+// New service handlers
+func (b *Bot) handleFiles(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov0" title="0">{
+        if args == "" </span><span class="cov0" title="0">{
+                // List available drives
+                drives := b.fileManager.GetAvailableDrives()
+                if len(drives) == 0 </span><span class="cov0" title="0">{
+                        return "❌ No drives available in configuration", false
+                }</span>
+
+                <span class="cov0" title="0">response := "📁 *File Manager*\n\nAvailable drives:\n"
+                for _, drive := range drives </span><span class="cov0" title="0">{
+                        response += fmt.Sprintf("• %s\n", drive)
+                }</span>
+                <span class="cov0" title="0">response += "\nUsage: `/files &lt;drive&gt;` to browse\nExample: `/files C:`"
+                return response, true</span>
+        }
+
+        // List directory contents
+        <span class="cov0" title="0">files, err := b.fileManager.ListDirectory(args)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Error listing directory: %v", err), false
+        }</span>
+
+        <span class="cov0" title="0">response := fmt.Sprintf("📁 *Directory: %s*\n\n", args)
+        for i, file := range files </span><span class="cov0" title="0">{
+                if i &gt;= 20 </span><span class="cov0" title="0">{ // Limit to 20 items
+                        response += "... and more\n"
+                        break</span>
+                }
+                <span class="cov0" title="0">icon := "📄"
+                if file.IsDir </span><span class="cov0" title="0">{
+                        icon = "📁"
+                }</span>
+                <span class="cov0" title="0">sizeStr := "&lt;DIR&gt;"
+                if !file.IsDir </span><span class="cov0" title="0">{
+                        sizeStr = filemanager.FormatSize(file.Size)
+                }</span>
+                <span class="cov0" title="0">response += fmt.Sprintf("%s %s (%s)\n", icon, file.Name, sizeStr)</span>
+        }
+
+        <span class="cov0" title="0">return response, true</span>
+}
+
+func (b *Bot) handleScreenshot(message *tgbotapi.Message, user *database.User, args string) (string, bool) <span class="cov0" title="0">{
+        filename, err := b.screenshotService.TakeScreenshot()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Error taking screenshot: %v", err), false
+        }</span>
+
+        // Send screenshot as photo
+        <span class="cov0" title="0">photo := tgbotapi.NewPhoto(message.Chat.ID, tgbotapi.FilePath(filename))
+        photo.Caption = fmt.Sprintf("📸 Desktop Screenshot\nTaken at: %s", time.Now().Format("2006-01-02 15:04:05"))
+
+        if _, err := b.api.Send(photo); err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Error sending screenshot: %v", err), false
+        }</span>
+
+        <span class="cov0" title="0">return "📸 Screenshot taken and sent!", true</span>
+}
+
+// Callback handlers for new services
+func (b *Bot) handleFilesCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        drives := b.fileManager.GetAvailableDrives()
+        if len(drives) == 0 </span><span class="cov0" title="0">{
+                return "❌ No drives available in configuration", false
+        }</span>
+
+        <span class="cov0" title="0">response := "📁 *File Manager*\n\nAvailable drives:\n"
+        for _, drive := range drives </span><span class="cov0" title="0">{
+                response += fmt.Sprintf("• %s\n", drive)
+        }</span>
+        <span class="cov0" title="0">response += "\nUse command `/files &lt;drive&gt;` to browse\nExample: `/files C:`"
+        return response, true</span>
+}
+
+func (b *Bot) handleScreenshotCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return "📸 *Screenshot Service*\n\nUse `/screenshot` command to take a desktop screenshot.", true
+}</span>
+
+func (b *Bot) handleEventsCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        // For now, just return that the service is enabled
+        status := "running"
+        if !b.config.Events.Enabled </span><span class="cov0" title="0">{
+                status = "disabled"
+        }</span>
+
+        <span class="cov0" title="0">return fmt.Sprintf("🔔 *System Events Monitor*\n\nStatus: %s\n\nMonitoring system events and sending notifications.", status), true</span>
+}
+
+func (b *Bot) handleMenuCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return fmt.Sprintf("📜 *Menu*\n\nHello, %s! Choose an action:", user.FirstName), true
+}</span>
+
+// Helper functions for callback type checking
+func isMenuCallback(data string) bool <span class="cov8" title="1">{
+        menuCallbacks := []string{"main_menu", "admin_menu", "menu", "power_menu", "user_menu", "file_manager_admin", "system_tools"}
+        for _, callback := range menuCallbacks </span><span class="cov8" title="1">{
+                if data == callback </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+func isPowerCallback(data string) bool <span class="cov8" title="1">{
+        powerCallbacks := []string{"power_menu", "shutdown_now", "shutdown_1min", "shutdown_5min", "shutdown_10min", "shutdown_30min",
+                "reboot_now", "reboot_1min", "reboot_5min", "reboot_10min", "reboot_30min", "force_shutdown", "force_reboot", "cancel_power", "power_status"}
+        for _, callback := range powerCallbacks </span><span class="cov8" title="1">{
+                if data == callback </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+func isUserManagementCallback(data string) bool <span class="cov8" title="1">{
+        userCallbacks := []string{"user_menu", "add_admin_menu", "remove_admin_menu", "ban_user_menu", "unban_user_menu", "delete_user_menu", "list_users"}
+        for _, callback := range userCallbacks </span><span class="cov8" title="1">{
+                if data == callback </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+func (b *Bot) getPowerMenuKeyboard() tgbotapi.InlineKeyboardMarkup <span class="cov8" title="1">{
+        rows := [][]tgbotapi.InlineKeyboardButton{
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🔴 Shutdown Now", "shutdown_now"),
+                        tgbotapi.NewInlineKeyboardButtonData("🔄 Reboot Now", "reboot_now"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("⏱️ Shutdown in 1min", "shutdown_1min"),
+                        tgbotapi.NewInlineKeyboardButtonData("⏱️ Reboot in 1min", "reboot_1min"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("⏰ Shutdown in 5min", "shutdown_5min"),
+                        tgbotapi.NewInlineKeyboardButtonData("⏰ Reboot in 5min", "reboot_5min"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🕒 Shutdown in 10min", "shutdown_10min"),
+                        tgbotapi.NewInlineKeyboardButtonData("🕒 Reboot in 10min", "reboot_10min"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🕥 Shutdown in 30min", "shutdown_30min"),
+                        tgbotapi.NewInlineKeyboardButtonData("🕥 Reboot in 30min", "reboot_30min"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("⚠️ Force Shutdown", "force_shutdown"),
+                        tgbotapi.NewInlineKeyboardButtonData("⚠️ Force Reboot", "force_reboot"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("❌ Cancel Operation", "cancel_power"),
+                        tgbotapi.NewInlineKeyboardButtonData("ℹ️ Power Status", "power_status"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+                },
+        }
+        return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}</span>
+
+func (b *Bot) getUserManagementKeyboard() tgbotapi.InlineKeyboardMarkup <span class="cov8" title="1">{
+        rows := [][]tgbotapi.InlineKeyboardButton{
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("👥 List All Users", "list_users"),
+                        tgbotapi.NewInlineKeyboardButtonData("📊 User Statistics", "stats"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("➕ Add Administrator", "add_admin_menu"),
+                        tgbotapi.NewInlineKeyboardButtonData("➖ Remove Administrator", "remove_admin_menu"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🚫 Ban User", "ban_user_menu"),
+                        tgbotapi.NewInlineKeyboardButtonData("✅ Unban User", "unban_user_menu"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🗑️ Delete User", "delete_user_menu"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+                },
+        }
+        return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}</span>
+
+func (b *Bot) getFileManagerKeyboard() tgbotapi.InlineKeyboardMarkup <span class="cov0" title="0">{
+        rows := [][]tgbotapi.InlineKeyboardButton{
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("📁 Browse Files", "files"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+                },
+        }
+        return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}</span>
+
+func (b *Bot) getSystemToolsKeyboard() tgbotapi.InlineKeyboardMarkup <span class="cov0" title="0">{
+        rows := [][]tgbotapi.InlineKeyboardButton{
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("💻 System Status", "status"),
+                        tgbotapi.NewInlineKeyboardButtonData("⏰ Uptime", "uptime"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("📝 Command History", "history"),
+                        tgbotapi.NewInlineKeyboardButtonData("🔔 System Events", "events"),
+                },
+                {
+                        tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+                },
+        }
+        return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}</span>
+
+// Power Management Callback Handlers
+func (b *Bot) handlePowerMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        // Check current power status
+        <span class="cov8" title="1">response := "🔌 *Power Management*\n\n"
+
+        if op := b.powerService.GetScheduledOperation(); op != nil </span><span class="cov0" title="0">{
+                timeLeft := time.Until(op.ScheduledAt)
+                response += fmt.Sprintf("⚠️ *Active Operation:* %s\n", op.Type)
+                response += fmt.Sprintf("⏰ *Time Remaining:* %v\n\n", timeLeft.Round(time.Second))
+        }</span>
+
+        <span class="cov8" title="1">response += "Choose a power operation:"
+        return response, true</span>
+}
+
+func (b *Bot) handleShutdownNowCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov0" title="0">err := b.powerService.ScheduleShutdown(user.ID, 0, false)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Error initiating shutdown: %v", err), false
+        }</span>
+
+        <span class="cov0" title="0">return "🔴 *Immediate shutdown initiated*\n\nThe system will shut down now.", true</span>
+}
+
+func (b *Bot) handleRebootNowCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov0" title="0">err := b.powerService.ScheduleReboot(user.ID, 0, false)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Error initiating reboot: %v", err), false
+        }</span>
+
+        <span class="cov0" title="0">return "🔄 *Immediate reboot initiated*\n\nThe system will restart now.", true</span>
+}
+
+func (b *Bot) handleShutdownDelayCallback(user *database.User, delay time.Duration, force bool) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">err := b.powerService.ScheduleShutdown(user.ID, delay, force)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Error scheduling shutdown: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">if delay == 0 </span><span class="cov0" title="0">{
+                if force </span><span class="cov0" title="0">{
+                        return "⚠️ *Force shutdown initiated*\n\nThe system will shut down immediately, closing all applications.", true
+                }</span>
+                <span class="cov0" title="0">return "🔴 *Immediate shutdown initiated*\n\nThe system will shut down now.", true</span>
+        }
+
+        <span class="cov8" title="1">actionType := "Shutdown"
+        if force </span><span class="cov0" title="0">{
+                actionType = "Force shutdown"
+        }</span>
+
+        <span class="cov8" title="1">return fmt.Sprintf("⏰ *%s scheduled*\n\nThe system will shut down in %v.", actionType, delay), true</span>
+}
+
+func (b *Bot) handleRebootDelayCallback(user *database.User, delay time.Duration, force bool) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">err := b.powerService.ScheduleReboot(user.ID, delay, force)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Sprintf("❌ Error scheduling reboot: %v", err), false
+        }</span>
+
+        <span class="cov0" title="0">if delay == 0 </span><span class="cov0" title="0">{
+                if force </span><span class="cov0" title="0">{
+                        return "⚠️ *Force reboot initiated*\n\nThe system will restart immediately, closing all applications.", true
+                }</span>
+                <span class="cov0" title="0">return "🔄 *Immediate reboot initiated*\n\nThe system will restart now.", true</span>
+        }
+
+        <span class="cov0" title="0">actionType := "Reboot"
+        if force </span><span class="cov0" title="0">{
+                actionType = "Force reboot"
+        }</span>
+
+        <span class="cov0" title="0">return fmt.Sprintf("⏰ *%s scheduled*\n\nThe system will restart in %v.", actionType, delay), true</span>
+}
+
+func (b *Bot) handleCancelPowerCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">err := b.powerService.CancelScheduledOperation()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Sprintf("❌ Error canceling operation: %v", err), false
+        }</span>
+
+        <span class="cov8" title="1">return "✅ *Power operation canceled*\n\nAny scheduled shutdown or reboot has been canceled.", true</span>
+}
+
+func (b *Bot) handlePowerStatusCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">status := b.powerService.GetPowerStatus()
+        response := "ℹ️ *Power Management Status*\n\n"
+
+        if op := b.powerService.GetScheduledOperation(); op != nil </span><span class="cov0" title="0">{
+                timeLeft := time.Until(op.ScheduledAt)
+                response += fmt.Sprintf("⚠️ *Active Operation:* %s\n", op.Type)
+                response += fmt.Sprintf("👤 *Initiated by:* User %d\n", op.UserID)
+                response += fmt.Sprintf("⏰ *Scheduled for:* %s\n", op.ScheduledAt.Format("15:04:05"))
+                response += fmt.Sprintf("⏱️ *Time remaining:* %v\n", timeLeft.Round(time.Second))
+        }</span> else<span class="cov8" title="1"> {
+                response += "✅ No active power operations\n"
+        }</span>
+
+        // Add platform-specific information
+        <span class="cov8" title="1">if supported, exists := status["supported"]; exists &amp;&amp; !supported.(bool) </span><span class="cov0" title="0">{
+                response += "\n⚠️ Platform: Non-Windows (limited support)"
+        }</span> else<span class="cov8" title="1"> {
+                response += "\n🟢 Platform: Windows (full support)"
+        }</span>
+
+        <span class="cov8" title="1">return response, true</span>
+}
+
+// User Management Callback Handlers
+func (b *Bot) handleUserMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov8" title="1">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "👥 *User Management*\n\nSelect a user management action:", true</span>
+}
+
+func (b *Bot) handleAddAdminMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "➕ *Add Administrator*\n\nTo promote a user to administrator, use the command:\n`/addadmin [User_ID]`\n\nExample: `/addadmin 123456789`", true</span>
+}
+
+func (b *Bot) handleRemoveAdminMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "➖ *Remove Administrator*\n\nTo remove admin privileges from a user, use the command:\n`/removeadmin [User_ID]`\n\nExample: `/removeadmin 123456789`", true</span>
+}
+
+func (b *Bot) handleBanUserMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "🚫 *Ban User*\n\nTo ban a user from using the bot, use the command:\n`/banuser [User_ID]`\n\nExample: `/banuser 123456789`", true</span>
+}
+
+func (b *Bot) handleUnbanUserMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "✅ *Unban User*\n\nTo unban a user and restore access, use the command:\n`/unbanuser [User_ID]`\n\nExample: `/unbanuser 123456789`", true</span>
+}
+
+func (b *Bot) handleDeleteUserMenuCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "🗑️ *Delete User*\n\nTo permanently delete a user from the database, use the command:\n`/deleteuser [User_ID]`\n\nExample: `/deleteuser 123456789`\n\n⚠️ *Warning:* This action cannot be undone!", true</span>
+}
+
+func (b *Bot) handleListUsersCallback(user *database.User) (string, bool) <span class="cov0" title="0">{
+        return b.handleUsersInternal(user)
+}</span>
+
+// Enhanced Service Callback Handlers
+func (b *Bot) handleFileManagerAdminCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "📁 *Enhanced File Manager*\n\nAdmin file management features:\n\n• Browse all accessible drives\n• Upload and download files\n• View file details and permissions\n\nUse the buttons below or `/files` command to start browsing.", true</span>
+}
+
+func (b *Bot) handleScreenshotAdminCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        // Check if running as service
+        <span class="cov8" title="1">response := "📸 *Enhanced Screenshot Service*\n\n"
+
+        // Try to take a screenshot to test functionality
+        _, err := b.screenshotService.TakeScreenshot()
+        if err != nil </span><span class="cov8" title="1">{
+                if strings.Contains(err.Error(), "service") </span><span class="cov0" title="0">{
+                        response += "⚠️ *Service Mode Detected*\n\n"
+                        response += "Screenshots are not available when running as a Windows Service.\n\n"
+                        response += "📝 *Alternative:* Run CupBot in interactive mode to enable screenshots.\n\n"
+                        response += "🔧 *How to run interactively:*\n"
+                        response += "1. Stop the Windows service\n"
+                        response += "2. Run `cupbot.exe` directly from command line\n"
+                        response += "3. Screenshot functionality will be available"
+                        return response, false
+                }</span>
+                <span class="cov8" title="1">response += fmt.Sprintf("❌ Error testing screenshot: %v\n\n", err)</span>
+        } else<span class="cov0" title="0"> {
+                response += "✅ Screenshot functionality is available\n\n"
+        }</span>
+
+        <span class="cov8" title="1">response += "Admin screenshot features:\n\n"
+        response += "• Capture full desktop\n"
+        response += "• Configurable quality and format\n"
+        response += "• Automatic timestamping\n\n"
+        response += "Use `/screenshot` command to capture the desktop."
+
+        return response, true</span>
+}
+
+func (b *Bot) handleSystemToolsCallback(user *database.User) (string, bool) <span class="cov8" title="1">{
+        if !user.IsAdmin </span><span class="cov0" title="0">{
+                return "❌ Access denied: Admin privileges required", false
+        }</span>
+
+        <span class="cov8" title="1">return "🔧 *System Tools*\n\nAdvanced system monitoring and management tools.\n\nSelect a tool from the menu below:", true</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package config
+
+import (
+        "fmt"
+        "os"
+        "strconv"
+        "strings"
+
+        "gopkg.in/yaml.v3"
+)
+
+type Config struct {
+        Bot         BotConfig         `yaml:"bot"`
+        Database    DatabaseConfig    `yaml:"database"`
+        Users       UsersConfig       `yaml:"users"`
+        FileManager FileManagerConfig `yaml:"file_manager"`
+        Screenshot  ScreenshotConfig  `yaml:"screenshot"`
+        Events      EventsConfig      `yaml:"events"`
+}
+
+type BotConfig struct {
+        Token string `yaml:"token"`
+        Debug bool   `yaml:"debug"`
+}
+
+type DatabaseConfig struct {
+        Path string `yaml:"path"`
+}
+
+type UsersConfig struct {
+        AdminUserIDs []int64 `yaml:"admin_user_ids"`
+        AllowedUsers []int64 `yaml:"allowed_users"`
+}
+
+type FileManagerConfig struct {
+        AllowedDrives  []string `yaml:"allowed_drives"`
+        MaxFileSize    int64    `yaml:"max_file_size"`   // bytes
+        AllowedActions []string `yaml:"allowed_actions"` // list, download, upload, delete
+        DownloadPath   string   `yaml:"download_path"`
+        UploadPath     string   `yaml:"upload_path"`
+}
+
+type ScreenshotConfig struct {
+        Enabled     bool   `yaml:"enabled"`
+        Quality     int    `yaml:"quality"` // 1-100
+        Format      string `yaml:"format"`  // png, jpg
+        MaxWidth    int    `yaml:"max_width"`
+        MaxHeight   int    `yaml:"max_height"`
+        StoragePath string `yaml:"storage_path"`
+}
+
+type EventsConfig struct {
+        Enabled         bool     `yaml:"enabled"`
+        NotifyUsers     []int64  `yaml:"notify_users"`     // Users to notify about events
+        WatchEvents     []string `yaml:"watch_events"`     // login, logout, startup, shutdown, error
+        PollingInterval int      `yaml:"polling_interval"` // seconds
+}
+
+func Load(configPath string) (*Config, error) <span class="cov8" title="1">{
+        // Сначала загружаем из файла
+        config := &amp;Config{}
+
+        if _, err := os.Stat(configPath); err == nil </span><span class="cov8" title="1">{
+                data, err := os.ReadFile(configPath)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to read config file: %w", err)
+                }</span>
+
+                <span class="cov8" title="1">if err := yaml.Unmarshal(data, config); err != nil </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("failed to parse config file: %w", err)
+                }</span>
+        }
+
+        // Переопределяем значения переменными окружения
+        <span class="cov8" title="1">if token := os.Getenv("BOT_TOKEN"); token != "" </span><span class="cov8" title="1">{
+                config.Bot.Token = token
+        }</span>
+
+        <span class="cov8" title="1">if debug := os.Getenv("BOT_DEBUG"); debug != "" </span><span class="cov8" title="1">{
+                config.Bot.Debug = debug == "true"
+        }</span>
+
+        <span class="cov8" title="1">if dbPath := os.Getenv("DB_PATH"); dbPath != "" </span><span class="cov8" title="1">{
+                config.Database.Path = dbPath
+        }</span>
+
+        <span class="cov8" title="1">if adminIDs := os.Getenv("ADMIN_USER_IDS"); adminIDs != "" </span><span class="cov8" title="1">{
+                ids := parseUserIDs(adminIDs)
+                if len(ids) &gt; 0 </span><span class="cov8" title="1">{
+                        config.Users.AdminUserIDs = ids
+                }</span>
+        }
+
+        <span class="cov8" title="1">if allowedIDs := os.Getenv("ALLOWED_USER_IDS"); allowedIDs != "" </span><span class="cov8" title="1">{
+                ids := parseUserIDs(allowedIDs)
+                if len(ids) &gt; 0 </span><span class="cov8" title="1">{
+                        config.Users.AllowedUsers = ids
+                }</span>
+        }
+
+        // Устанавливаем значения по умолчанию
+        <span class="cov8" title="1">if config.Database.Path == "" </span><span class="cov8" title="1">{
+                config.Database.Path = "cupbot.db"
+        }</span>
+
+        // File Manager defaults
+        <span class="cov8" title="1">if len(config.FileManager.AllowedDrives) == 0 </span><span class="cov8" title="1">{
+                config.FileManager.AllowedDrives = []string{"C:", "D:"}
+        }</span>
+        <span class="cov8" title="1">if config.FileManager.MaxFileSize == 0 </span><span class="cov8" title="1">{
+                config.FileManager.MaxFileSize = 10 * 1024 * 1024 // 10MB
+        }</span>
+        <span class="cov8" title="1">if len(config.FileManager.AllowedActions) == 0 </span><span class="cov8" title="1">{
+                config.FileManager.AllowedActions = []string{"list", "download"}
+        }</span>
+        <span class="cov8" title="1">if config.FileManager.DownloadPath == "" </span><span class="cov8" title="1">{
+                config.FileManager.DownloadPath = "./downloads"
+        }</span>
+        <span class="cov8" title="1">if config.FileManager.UploadPath == "" </span><span class="cov8" title="1">{
+                config.FileManager.UploadPath = "./uploads"
+        }</span>
+
+        // Screenshot defaults
+        <span class="cov8" title="1">if config.Screenshot.Quality == 0 </span><span class="cov8" title="1">{
+                config.Screenshot.Quality = 80
+        }</span>
+        <span class="cov8" title="1">if config.Screenshot.Format == "" </span><span class="cov8" title="1">{
+                config.Screenshot.Format = "png"
+        }</span>
+        <span class="cov8" title="1">if config.Screenshot.MaxWidth == 0 </span><span class="cov8" title="1">{
+                config.Screenshot.MaxWidth = 1920
+        }</span>
+        <span class="cov8" title="1">if config.Screenshot.MaxHeight == 0 </span><span class="cov8" title="1">{
+                config.Screenshot.MaxHeight = 1080
+        }</span>
+        <span class="cov8" title="1">if config.Screenshot.StoragePath == "" </span><span class="cov8" title="1">{
+                config.Screenshot.StoragePath = "./screenshots"
+        }</span>
+
+        // Events defaults
+        <span class="cov8" title="1">if config.Events.PollingInterval == 0 </span><span class="cov8" title="1">{
+                config.Events.PollingInterval = 30 // 30 seconds
+        }</span>
+        <span class="cov8" title="1">if len(config.Events.WatchEvents) == 0 </span><span class="cov8" title="1">{
+                config.Events.WatchEvents = []string{"login", "logout", "error"}
+        }</span>
+        <span class="cov8" title="1">if config.Events.NotifyUsers == nil </span><span class="cov8" title="1">{
+                config.Events.NotifyUsers = make([]int64, 0)
+        }</span>
+
+        // Ensure slices are never nil
+        <span class="cov8" title="1">if config.Users.AdminUserIDs == nil </span><span class="cov8" title="1">{
+                config.Users.AdminUserIDs = make([]int64, 0)
+        }</span>
+        <span class="cov8" title="1">if config.Users.AllowedUsers == nil </span><span class="cov8" title="1">{
+                config.Users.AllowedUsers = make([]int64, 0)
+        }</span>
+
+        <span class="cov8" title="1">return config, nil</span>
+}
+
+func parseUserIDs(s string) []int64 <span class="cov8" title="1">{
+        parts := strings.Split(s, ",")
+        ids := make([]int64, 0) // Always return non-nil slice
+
+        for _, part := range parts </span><span class="cov8" title="1">{
+                part = strings.TrimSpace(part)
+                if id, err := strconv.ParseInt(part, 10, 64); err == nil </span><span class="cov8" title="1">{
+                        ids = append(ids, id)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return ids</span>
+}
+
+func (c *Config) IsAdmin(userID int64) bool <span class="cov8" title="1">{
+        for _, id := range c.Users.AdminUserIDs </span><span class="cov8" title="1">{
+                if id == userID </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+func (c *Config) IsAllowed(userID int64) bool <span class="cov8" title="1">{
+        // Администраторы всегда разрешены
+        if c.IsAdmin(userID) </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        // Если список разрешенных пользователей пуст, то разрешены только админы
+        <span class="cov8" title="1">if len(c.Users.AllowedUsers) == 0 </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">for _, id := range c.Users.AllowedUsers </span><span class="cov8" title="1">{
+                if id == userID </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+// IsDriveAllowed checks if a drive is in the allowed drives list
+func (c *Config) IsDriveAllowed(drive string) bool <span class="cov0" title="0">{
+        for _, allowedDrive := range c.FileManager.AllowedDrives </span><span class="cov0" title="0">{
+                if allowedDrive == drive </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+// IsActionAllowed checks if a file manager action is allowed
+func (c *Config) IsActionAllowed(action string) bool <span class="cov0" title="0">{
+        for _, allowedAction := range c.FileManager.AllowedActions </span><span class="cov0" title="0">{
+                if allowedAction == action </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+// IsEventWatched checks if an event type is being watched
+func (c *Config) IsEventWatched(eventType string) bool <span class="cov0" title="0">{
+        for _, watchedEvent := range c.Events.WatchEvents </span><span class="cov0" title="0">{
+                if watchedEvent == eventType </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+// ShouldNotifyUser checks if a user should be notified about events
+func (c *Config) ShouldNotifyUser(userID int64) bool <span class="cov0" title="0">{
+        for _, notifyUser := range c.Events.NotifyUsers </span><span class="cov0" title="0">{
+                if notifyUser == userID </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package database
+
+import (
+        "database/sql"
+        "fmt"
+        "time"
+
+        _ "github.com/mattn/go-sqlite3"
+)
+
+// User представляет пользователя бота
+type User struct {
+        ID        int64     `json:"id" db:"id"`
+        Username  string    `json:"username" db:"username"`
+        FirstName string    `json:"first_name" db:"first_name"`
+        LastName  string    `json:"last_name" db:"last_name"`
+        IsAdmin   bool      `json:"is_admin" db:"is_admin"`
+        IsActive  bool      `json:"is_active" db:"is_active"`
+        CreatedAt time.Time `json:"created_at" db:"created_at"`
+        UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// CommandHistory представляет историю выполненных команд
+type CommandHistory struct {
+        ID         int64     `json:"id" db:"id"`
+        UserID     int64     `json:"user_id" db:"user_id"`
+        Command    string    `json:"command" db:"command"`
+        Arguments  string    `json:"arguments" db:"arguments"`
+        Success    bool      `json:"success" db:"success"`
+        Response   string    `json:"response" db:"response"`
+        ExecutedAt time.Time `json:"executed_at" db:"executed_at"`
+}
+
+// UserSession представляет активную сессию пользователя
+type UserSession struct {
+        UserID   int64     `json:"user_id" db:"user_id"`
+        ChatID   int64     `json:"chat_id" db:"chat_id"`
+        LastSeen time.Time `json:"last_seen" db:"last_seen"`
+        IsActive bool      `json:"is_active" db:"is_active"`
+}
+
+// DB представляет подключение к базе данных
+type DB struct {
+        conn *sql.DB
+}
+
+// New создает новое подключение к базе данных
+func New(dbPath string) (*DB, error) <span class="cov8" title="1">{
+        conn, err := sql.Open("sqlite3", dbPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to open database: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">db := &amp;DB{conn: conn}
+
+        if err := db.migrate(); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to migrate database: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return db, nil</span>
+}
+
+// Close закрывает подключение к базе данных
+func (db *DB) Close() error <span class="cov8" title="1">{
+        return db.conn.Close()
+}</span>
+
+// migrate выполняет миграции базы данных
+func (db *DB) migrate() error <span class="cov8" title="1">{
+        queries := []string{
+                `CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY,
+                        username TEXT,
+                        first_name TEXT,
+                        last_name TEXT,
+                        is_admin BOOLEAN DEFAULT FALSE,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )`,
+                `CREATE TABLE IF NOT EXISTS command_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        command TEXT NOT NULL,
+                        arguments TEXT,
+                        success BOOLEAN NOT NULL,
+                        response TEXT,
+                        executed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                )`,
+                `CREATE TABLE IF NOT EXISTS user_sessions (
+                        user_id INTEGER PRIMARY KEY,
+                        chat_id INTEGER NOT NULL,
+                        last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                )`,
+                `CREATE INDEX IF NOT EXISTS idx_command_history_user_id ON command_history (user_id)`,
+                `CREATE INDEX IF NOT EXISTS idx_command_history_executed_at ON command_history (executed_at)`,
+                `CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions (user_id)`,
+        }
+
+        for _, query := range queries </span><span class="cov8" title="1">{
+                if _, err := db.conn.Exec(query); err != nil </span><span class="cov8" title="1">{
+                        return fmt.Errorf("failed to execute migration query: %w", err)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// CreateOrUpdateUser создает или обновляет пользователя
+func (db *DB) CreateOrUpdateUser(user *User) error <span class="cov8" title="1">{
+        query := `
+                INSERT OR REPLACE INTO users (id, username, first_name, last_name, is_admin, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, COALESCE((SELECT created_at FROM users WHERE id = ?), CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+        `
+
+        _, err := db.conn.Exec(query, user.ID, user.Username, user.FirstName, user.LastName,
+                user.IsAdmin, user.IsActive, user.ID)
+
+        return err
+}</span>
+
+// GetUser получает пользователя по ID
+func (db *DB) GetUser(userID int64) (*User, error) <span class="cov8" title="1">{
+        query := `
+                SELECT id, username, first_name, last_name, is_admin, is_active, created_at, updated_at
+                FROM users WHERE id = ?
+        `
+
+        user := &amp;User{}
+        err := db.conn.QueryRow(query, userID).Scan(
+                &amp;user.ID, &amp;user.Username, &amp;user.FirstName, &amp;user.LastName,
+                &amp;user.IsAdmin, &amp;user.IsActive, &amp;user.CreatedAt, &amp;user.UpdatedAt,
+        )
+
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return user, nil</span>
+}
+
+// GetAllUsers получает всех пользователей
+func (db *DB) GetAllUsers() ([]*User, error) <span class="cov8" title="1">{
+        query := `
+                SELECT id, username, first_name, last_name, is_admin, is_active, created_at, updated_at
+                FROM users ORDER BY created_at DESC
+        `
+
+        rows, err := db.conn.Query(query)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">defer rows.Close()
+
+        var users []*User
+        for rows.Next() </span><span class="cov8" title="1">{
+                user := &amp;User{}
+                err := rows.Scan(
+                        &amp;user.ID, &amp;user.Username, &amp;user.FirstName, &amp;user.LastName,
+                        &amp;user.IsAdmin, &amp;user.IsActive, &amp;user.CreatedAt, &amp;user.UpdatedAt,
+                )
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov8" title="1">users = append(users, user)</span>
+        }
+
+        <span class="cov8" title="1">return users, nil</span>
+}
+
+// AddCommandHistory добавляет запись в историю команд
+func (db *DB) AddCommandHistory(history *CommandHistory) error <span class="cov0" title="0">{
+        query := `
+                INSERT INTO command_history (user_id, command, arguments, success, response, executed_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+        `
+
+        result, err := db.conn.Exec(query, history.UserID, history.Command, history.Arguments,
+                history.Success, history.Response, history.ExecutedAt)
+
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">id, err := result.LastInsertId()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">history.ID = id
+        return nil</span>
+}
+
+// GetCommandHistory получает историю команд пользователя
+func (db *DB) GetCommandHistory(userID int64, limit int) ([]*CommandHistory, error) <span class="cov0" title="0">{
+        query := `
+                SELECT id, user_id, command, arguments, success, response, executed_at
+                FROM command_history 
+                WHERE user_id = ? 
+                ORDER BY executed_at DESC 
+                LIMIT ?
+        `
+
+        rows, err := db.conn.Query(query, userID, limit)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer rows.Close()
+
+        var history []*CommandHistory
+        for rows.Next() </span><span class="cov0" title="0">{
+                cmd := &amp;CommandHistory{}
+                err := rows.Scan(
+                        &amp;cmd.ID, &amp;cmd.UserID, &amp;cmd.Command, &amp;cmd.Arguments,
+                        &amp;cmd.Success, &amp;cmd.Response, &amp;cmd.ExecutedAt,
+                )
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov0" title="0">history = append(history, cmd)</span>
+        }
+
+        <span class="cov0" title="0">return history, nil</span>
+}
+
+// GetAllCommandHistory получает всю историю команд (для админов)
+func (db *DB) GetAllCommandHistory(limit int) ([]*CommandHistory, error) <span class="cov0" title="0">{
+        query := `
+                SELECT ch.id, ch.user_id, ch.command, ch.arguments, ch.success, ch.response, ch.executed_at
+                FROM command_history ch
+                ORDER BY ch.executed_at DESC 
+                LIMIT ?
+        `
+
+        rows, err := db.conn.Query(query, limit)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer rows.Close()
+
+        var history []*CommandHistory
+        for rows.Next() </span><span class="cov0" title="0">{
+                cmd := &amp;CommandHistory{}
+                err := rows.Scan(
+                        &amp;cmd.ID, &amp;cmd.UserID, &amp;cmd.Command, &amp;cmd.Arguments,
+                        &amp;cmd.Success, &amp;cmd.Response, &amp;cmd.ExecutedAt,
+                )
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov0" title="0">history = append(history, cmd)</span>
+        }
+
+        <span class="cov0" title="0">return history, nil</span>
+}
+
+// UpdateUserSession обновляет сессию пользователя
+func (db *DB) UpdateUserSession(session *UserSession) error <span class="cov0" title="0">{
+        query := `
+                INSERT OR REPLACE INTO user_sessions (user_id, chat_id, last_seen, is_active)
+                VALUES (?, ?, ?, ?)
+        `
+
+        _, err := db.conn.Exec(query, session.UserID, session.ChatID, session.LastSeen, session.IsActive)
+        return err
+}</span>
+
+// GetUserSession получает сессию пользователя
+func (db *DB) GetUserSession(userID int64) (*UserSession, error) <span class="cov0" title="0">{
+        query := `
+                SELECT user_id, chat_id, last_seen, is_active
+                FROM user_sessions WHERE user_id = ?
+        `
+
+        session := &amp;UserSession{}
+        err := db.conn.QueryRow(query, userID).Scan(
+                &amp;session.UserID, &amp;session.ChatID, &amp;session.LastSeen, &amp;session.IsActive,
+        )
+
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov0" title="0">return session, nil</span>
+}
+
+// GetActiveUsers получает активных пользователей за последние N минут
+func (db *DB) GetActiveUsers(minutes int) ([]*UserSession, error) <span class="cov0" title="0">{
+        query := `
+                SELECT user_id, chat_id, last_seen, is_active
+                FROM user_sessions 
+                WHERE is_active = TRUE AND last_seen &gt; datetime('now', '-' || ? || ' minutes')
+                ORDER BY last_seen DESC
+        `
+
+        rows, err := db.conn.Query(query, minutes)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer rows.Close()
+
+        var sessions []*UserSession
+        for rows.Next() </span><span class="cov0" title="0">{
+                session := &amp;UserSession{}
+                err := rows.Scan(
+                        &amp;session.UserID, &amp;session.ChatID, &amp;session.LastSeen, &amp;session.IsActive,
+                )
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov0" title="0">sessions = append(sessions, session)</span>
+        }
+
+        <span class="cov0" title="0">return sessions, nil</span>
+}
+
+// CleanOldHistory удаляет старую историю команд (старше N дней)
+func (db *DB) CleanOldHistory(days int) error <span class="cov0" title="0">{
+        query := `
+                DELETE FROM command_history 
+                WHERE executed_at &lt; datetime('now', '-' || ? || ' days')
+        `
+
+        _, err := db.conn.Exec(query, days)
+        return err
+}</span>
+
+// GetStats получает статистику использования
+func (db *DB) GetStats() (map[string]interface{}, error) <span class="cov0" title="0">{
+        stats := make(map[string]interface{})
+
+        // Общее количество пользователей
+        var totalUsers int
+        err := db.conn.QueryRow("SELECT COUNT(*) FROM users").Scan(&amp;totalUsers)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">stats["total_users"] = totalUsers
+
+        // Активные пользователи
+        var activeUsers int
+        err = db.conn.QueryRow("SELECT COUNT(*) FROM users WHERE is_active = TRUE").Scan(&amp;activeUsers)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">stats["active_users"] = activeUsers
+
+        // Общее количество команд
+        var totalCommands int
+        err = db.conn.QueryRow("SELECT COUNT(*) FROM command_history").Scan(&amp;totalCommands)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">stats["total_commands"] = totalCommands
+
+        // Успешные команды
+        var successfulCommands int
+        err = db.conn.QueryRow("SELECT COUNT(*) FROM command_history WHERE success = TRUE").Scan(&amp;successfulCommands)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">stats["successful_commands"] = successfulCommands
+
+        // Команды за последние 24 часа
+        var recentCommands int
+        err = db.conn.QueryRow(`
+                SELECT COUNT(*) FROM command_history 
+                WHERE executed_at &gt; datetime('now', '-1 day')
+        `).Scan(&amp;recentCommands)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">stats["recent_commands"] = recentCommands
+
+        return stats, nil</span>
+}
+
+// SetUserAdmin sets or removes admin privileges for a user
+func (db *DB) SetUserAdmin(userID int64, isAdmin bool) error <span class="cov0" title="0">{
+        query := `UPDATE users SET is_admin = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        _, err := db.conn.Exec(query, isAdmin, userID)
+        return err
+}</span>
+
+// SetUserActive activates or deactivates a user
+func (db *DB) SetUserActive(userID int64, isActive bool) error <span class="cov0" title="0">{
+        query := `UPDATE users SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        _, err := db.conn.Exec(query, isActive, userID)
+        return err
+}</span>
+
+// DeleteUser removes a user from the database
+func (db *DB) DeleteUser(userID int64) error <span class="cov0" title="0">{
+        tx, err := db.conn.Begin()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer tx.Rollback()
+
+        // Delete user sessions
+        _, err = tx.Exec(`DELETE FROM user_sessions WHERE user_id = ?`, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Delete command history
+        <span class="cov0" title="0">_, err = tx.Exec(`DELETE FROM command_history WHERE user_id = ?`, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        // Delete user
+        <span class="cov0" title="0">_, err = tx.Exec(`DELETE FROM users WHERE id = ?`, userID)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov0" title="0">return tx.Commit()</span>
+}
+
+// GetUsersByStatus gets users by their active status
+func (db *DB) GetUsersByStatus(isActive bool) ([]*User, error) <span class="cov0" title="0">{
+        query := `
+                SELECT id, username, first_name, last_name, is_admin, is_active, created_at, updated_at
+                FROM users WHERE is_active = ? ORDER BY created_at DESC
+        `
+
+        rows, err := db.conn.Query(query, isActive)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov0" title="0">defer rows.Close()
+
+        var users []*User
+        for rows.Next() </span><span class="cov0" title="0">{
+                user := &amp;User{}
+                err := rows.Scan(
+                        &amp;user.ID, &amp;user.Username, &amp;user.FirstName, &amp;user.LastName,
+                        &amp;user.IsAdmin, &amp;user.IsActive, &amp;user.CreatedAt, &amp;user.UpdatedAt,
+                )
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, err
+                }</span>
+                <span class="cov0" title="0">users = append(users, user)</span>
+        }
+
+        <span class="cov0" title="0">return users, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package events
+
+import (
+        "context"
+        "fmt"
+        "log"
+        "os/exec"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/cupbot/cupbot/internal/config"
+)
+
+// EventType represents different types of system events
+type EventType string
+
+const (
+        EventLogin    EventType = "login"
+        EventLogout   EventType = "logout"
+        EventStartup  EventType = "startup"
+        EventShutdown EventType = "shutdown"
+        EventError    EventType = "error"
+        EventProcess  EventType = "process"
+        EventService  EventType = "service"
+)
+
+// SystemEvent represents a system event
+type SystemEvent struct {
+        Type      EventType `json:"type"`
+        Message   string    `json:"message"`
+        Details   string    `json:"details"`
+        Timestamp time.Time `json:"timestamp"`
+        Severity  string    `json:"severity"` // info, warning, error, critical
+        Source    string    `json:"source"`
+        UserID    string    `json:"user_id,omitempty"`
+}
+
+// EventHandler is a function that handles system events
+type EventHandler func(event SystemEvent)
+
+// Service provides system event monitoring
+type Service struct {
+        config   *config.Config
+        handlers []EventHandler
+        ctx      context.Context
+        cancel   context.CancelFunc
+        wg       sync.WaitGroup
+        mu       sync.RWMutex
+
+        // Event state tracking
+        lastBootTime   time.Time
+        lastLoginCheck time.Time
+        knownProcesses map[string]bool
+        knownServices  map[string]string
+}
+
+// NewService creates a new events service
+func NewService(cfg *config.Config) *Service <span class="cov0" title="0">{
+        ctx, cancel := context.WithCancel(context.Background())
+
+        return &amp;Service{
+                config:         cfg,
+                handlers:       make([]EventHandler, 0),
+                ctx:            ctx,
+                cancel:         cancel,
+                knownProcesses: make(map[string]bool),
+                knownServices:  make(map[string]string),
+        }
+}</span>
+
+// AddHandler adds an event handler
+func (s *Service) AddHandler(handler EventHandler) <span class="cov0" title="0">{
+        s.mu.Lock()
+        defer s.mu.Unlock()
+        s.handlers = append(s.handlers, handler)
+}</span>
+
+// Start begins monitoring system events
+func (s *Service) Start() error <span class="cov0" title="0">{
+        if !s.config.Events.Enabled </span><span class="cov0" title="0">{
+                log.Println("Events monitoring is disabled")
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">log.Println("Starting system events monitoring...")
+
+        // Initialize tracking data
+        s.initializeTracking()
+
+        // Start monitoring routines
+        s.wg.Add(1)
+        go s.monitorEvents()
+
+        // Send startup event
+        s.emitEvent(SystemEvent{
+                Type:      EventStartup,
+                Message:   "CupBot system monitoring started",
+                Timestamp: time.Now(),
+                Severity:  "info",
+                Source:    "cupbot",
+        })
+
+        return nil</span>
+}
+
+// Stop stops the events monitoring
+func (s *Service) Stop() <span class="cov0" title="0">{
+        log.Println("Stopping system events monitoring...")
+
+        // Send shutdown event
+        s.emitEvent(SystemEvent{
+                Type:      EventShutdown,
+                Message:   "CupBot system monitoring stopped",
+                Timestamp: time.Now(),
+                Severity:  "info",
+                Source:    "cupbot",
+        })
+
+        s.cancel()
+        s.wg.Wait()
+}</span>
+
+// IsEventWatched checks if an event type is being monitored
+func (s *Service) IsEventWatched(eventType EventType) bool <span class="cov0" title="0">{
+        return s.config.IsEventWatched(string(eventType))
+}</span>
+
+// monitorEvents runs the main event monitoring loop
+func (s *Service) monitorEvents() <span class="cov0" title="0">{
+        defer s.wg.Done()
+
+        ticker := time.NewTicker(time.Duration(s.config.Events.PollingInterval) * time.Second)
+        defer ticker.Stop()
+
+        for </span><span class="cov0" title="0">{
+                select </span>{
+                case &lt;-s.ctx.Done():<span class="cov0" title="0">
+                        return</span>
+                case &lt;-ticker.C:<span class="cov0" title="0">
+                        s.checkEvents()</span>
+                }
+        }
+}
+
+// checkEvents performs various system checks
+func (s *Service) checkEvents() <span class="cov0" title="0">{
+        // Check for login/logout events
+        if s.IsEventWatched(EventLogin) || s.IsEventWatched(EventLogout) </span><span class="cov0" title="0">{
+                s.checkLoginEvents()
+        }</span>
+
+        // Check for process events
+        <span class="cov0" title="0">if s.IsEventWatched(EventProcess) </span><span class="cov0" title="0">{
+                s.checkProcessEvents()
+        }</span>
+
+        // Check for service events
+        <span class="cov0" title="0">if s.IsEventWatched(EventService) </span><span class="cov0" title="0">{
+                s.checkServiceEvents()
+        }</span>
+
+        // Check for errors in event log
+        <span class="cov0" title="0">if s.IsEventWatched(EventError) </span><span class="cov0" title="0">{
+                s.checkErrorEvents()
+        }</span>
+}
+
+// initializeTracking initializes the tracking state
+func (s *Service) initializeTracking() <span class="cov0" title="0">{
+        // Get current boot time
+        s.lastBootTime = s.getSystemBootTime()
+        s.lastLoginCheck = time.Now()
+
+        // Initialize known processes
+        processes := s.getCurrentProcesses()
+        for _, proc := range processes </span><span class="cov0" title="0">{
+                s.knownProcesses[proc] = true
+        }</span>
+
+        // Initialize known services
+        <span class="cov0" title="0">services := s.getCurrentServices()
+        for name, status := range services </span><span class="cov0" title="0">{
+                s.knownServices[name] = status
+        }</span>
+}
+
+// checkLoginEvents monitors for user login/logout events
+func (s *Service) checkLoginEvents() <span class="cov0" title="0">{
+        // Use PowerShell to check recent logon events
+        cmd := exec.Command("powershell", "-Command",
+                fmt.Sprintf("Get-WinEvent -FilterHashtable @{LogName='Security'; ID=4624,4634; StartTime='%s'} -MaxEvents 10 | Select-Object TimeCreated, Id, Message",
+                        s.lastLoginCheck.Format("2006-01-02T15:04:05")))
+
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return // No events or error
+        }</span>
+
+        <span class="cov0" title="0">events := s.parseLogonEvents(string(output))
+        for _, event := range events </span><span class="cov0" title="0">{
+                s.emitEvent(event)
+        }</span>
+
+        <span class="cov0" title="0">s.lastLoginCheck = time.Now()</span>
+}
+
+// checkProcessEvents monitors for new/terminated processes
+func (s *Service) checkProcessEvents() <span class="cov0" title="0">{
+        currentProcesses := s.getCurrentProcesses()
+        currentMap := make(map[string]bool)
+
+        // Check for new processes
+        for _, proc := range currentProcesses </span><span class="cov0" title="0">{
+                currentMap[proc] = true
+                if !s.knownProcesses[proc] </span><span class="cov0" title="0">{
+                        s.emitEvent(SystemEvent{
+                                Type:      EventProcess,
+                                Message:   fmt.Sprintf("New process started: %s", proc),
+                                Timestamp: time.Now(),
+                                Severity:  "info",
+                                Source:    "process_monitor",
+                        })
+                }</span>
+        }
+
+        // Check for terminated processes
+        <span class="cov0" title="0">for proc := range s.knownProcesses </span><span class="cov0" title="0">{
+                if !currentMap[proc] </span><span class="cov0" title="0">{
+                        s.emitEvent(SystemEvent{
+                                Type:      EventProcess,
+                                Message:   fmt.Sprintf("Process terminated: %s", proc),
+                                Timestamp: time.Now(),
+                                Severity:  "info",
+                                Source:    "process_monitor",
+                        })
+                }</span>
+        }
+
+        <span class="cov0" title="0">s.knownProcesses = currentMap</span>
+}
+
+// checkServiceEvents monitors for service status changes
+func (s *Service) checkServiceEvents() <span class="cov0" title="0">{
+        currentServices := s.getCurrentServices()
+
+        for name, status := range currentServices </span><span class="cov0" title="0">{
+                if oldStatus, exists := s.knownServices[name]; exists </span><span class="cov0" title="0">{
+                        if oldStatus != status </span><span class="cov0" title="0">{
+                                s.emitEvent(SystemEvent{
+                                        Type:      EventService,
+                                        Message:   fmt.Sprintf("Service %s changed from %s to %s", name, oldStatus, status),
+                                        Timestamp: time.Now(),
+                                        Severity:  s.getServiceSeverity(status),
+                                        Source:    "service_monitor",
+                                })
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">s.knownServices = currentServices</span>
+}
+
+// checkErrorEvents monitors for system errors
+func (s *Service) checkErrorEvents() <span class="cov0" title="0">{
+        // Check system event log for recent errors
+        cmd := exec.Command("powershell", "-Command",
+                fmt.Sprintf("Get-WinEvent -FilterHashtable @{LogName='System'; Level=1,2; StartTime='%s'} -MaxEvents 5 | Select-Object TimeCreated, LevelDisplayName, Message",
+                        time.Now().Add(-time.Duration(s.config.Events.PollingInterval*2)*time.Second).Format("2006-01-02T15:04:05")))
+
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov0" title="0">errorEvents := s.parseErrorEvents(string(output))
+        for _, event := range errorEvents </span><span class="cov0" title="0">{
+                s.emitEvent(event)
+        }</span>
+}
+
+// Helper methods for system information gathering
+
+func (s *Service) getSystemBootTime() time.Time <span class="cov0" title="0">{
+        cmd := exec.Command("powershell", "-Command", "(Get-CimInstance -ClassName Win32_OperatingSystem).LastBootUpTime")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return time.Now()
+        }</span>
+
+        <span class="cov0" title="0">bootTimeStr := strings.TrimSpace(string(output))
+        bootTime, err := time.Parse("2006-01-02 15:04:05", bootTimeStr[:19])
+        if err != nil </span><span class="cov0" title="0">{
+                return time.Now()
+        }</span>
+
+        <span class="cov0" title="0">return bootTime</span>
+}
+
+func (s *Service) getCurrentProcesses() []string <span class="cov0" title="0">{
+        cmd := exec.Command("powershell", "-Command", "Get-Process | Select-Object -ExpandProperty ProcessName")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return []string{}
+        }</span>
+
+        <span class="cov0" title="0">lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+        processes := make([]string, 0, len(lines))
+        for _, line := range lines </span><span class="cov0" title="0">{
+                if proc := strings.TrimSpace(line); proc != "" </span><span class="cov0" title="0">{
+                        processes = append(processes, proc)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return processes</span>
+}
+
+func (s *Service) getCurrentServices() map[string]string <span class="cov0" title="0">{
+        cmd := exec.Command("powershell", "-Command", "Get-Service | Select-Object Name, Status")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return map[string]string{}
+        }</span>
+
+        <span class="cov0" title="0">services := make(map[string]string)
+        lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+
+        for _, line := range lines[3:] </span><span class="cov0" title="0">{ // Skip header lines
+                if fields := strings.Fields(line); len(fields) &gt;= 2 </span><span class="cov0" title="0">{
+                        name := fields[0]
+                        status := fields[len(fields)-1]
+                        services[name] = status
+                }</span>
+        }
+
+        <span class="cov0" title="0">return services</span>
+}
+
+// Event parsing methods
+
+func (s *Service) parseLogonEvents(output string) []SystemEvent <span class="cov0" title="0">{
+        var events []SystemEvent
+        lines := strings.Split(output, "\n")
+
+        for _, line := range lines </span><span class="cov0" title="0">{
+                if strings.Contains(line, "4624") </span><span class="cov0" title="0">{ // Logon
+                        events = append(events, SystemEvent{
+                                Type:      EventLogin,
+                                Message:   "User logged in",
+                                Details:   line,
+                                Timestamp: time.Now(),
+                                Severity:  "info",
+                                Source:    "security_log",
+                        })
+                }</span> else<span class="cov0" title="0"> if strings.Contains(line, "4634") </span><span class="cov0" title="0">{ // Logoff
+                        events = append(events, SystemEvent{
+                                Type:      EventLogout,
+                                Message:   "User logged out",
+                                Details:   line,
+                                Timestamp: time.Now(),
+                                Severity:  "info",
+                                Source:    "security_log",
+                        })
+                }</span>
+        }
+
+        <span class="cov0" title="0">return events</span>
+}
+
+func (s *Service) parseErrorEvents(output string) []SystemEvent <span class="cov0" title="0">{
+        var events []SystemEvent
+        lines := strings.Split(output, "\n")
+
+        for _, line := range lines </span><span class="cov0" title="0">{
+                if strings.TrimSpace(line) == "" </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">severity := "warning"
+                if strings.Contains(strings.ToLower(line), "error") || strings.Contains(strings.ToLower(line), "critical") </span><span class="cov0" title="0">{
+                        severity = "error"
+                }</span>
+
+                <span class="cov0" title="0">events = append(events, SystemEvent{
+                        Type:      EventError,
+                        Message:   "System error detected",
+                        Details:   line,
+                        Timestamp: time.Now(),
+                        Severity:  severity,
+                        Source:    "system_log",
+                })</span>
+        }
+
+        <span class="cov0" title="0">return events</span>
+}
+
+// Helper methods
+
+func (s *Service) getServiceSeverity(status string) string <span class="cov0" title="0">{
+        switch strings.ToLower(status) </span>{
+        case "stopped":<span class="cov0" title="0">
+                return "warning"</span>
+        case "running":<span class="cov0" title="0">
+                return "info"</span>
+        default:<span class="cov0" title="0">
+                return "info"</span>
+        }
+}
+
+// emitEvent sends an event to all registered handlers
+func (s *Service) emitEvent(event SystemEvent) <span class="cov0" title="0">{
+        s.mu.RLock()
+        handlers := make([]EventHandler, len(s.handlers))
+        copy(handlers, s.handlers)
+        s.mu.RUnlock()
+
+        for _, handler := range handlers </span><span class="cov0" title="0">{
+                go handler(event)
+        }</span>
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package filemanager
+
+import (
+        "fmt"
+        "io"
+        "os"
+        "path/filepath"
+        "sort"
+        "strings"
+        "time"
+
+        "github.com/cupbot/cupbot/internal/config"
+)
+
+// FileInfo represents information about a file or directory
+type FileInfo struct {
+        Name    string    `json:"name"`
+        Path    string    `json:"path"`
+        Size    int64     `json:"size"`
+        IsDir   bool      `json:"is_dir"`
+        ModTime time.Time `json:"mod_time"`
+        Mode    string    `json:"mode"`
+}
+
+// Service provides file management operations
+type Service struct {
+        config *config.Config
+}
+
+// NewService creates a new file manager service
+func NewService(cfg *config.Config) *Service <span class="cov8" title="1">{
+        return &amp;Service{
+                config: cfg,
+        }
+}</span>
+
+// ListDirectory lists files and directories in the specified path
+func (s *Service) ListDirectory(path string) ([]FileInfo, error) <span class="cov8" title="1">{
+        // Check if the drive is allowed
+        if !s.isDriveAllowed(path) </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("access to drive not allowed")
+        }</span>
+
+        // Clean and validate path
+        <span class="cov8" title="1">cleanPath := filepath.Clean(path)
+
+        entries, err := os.ReadDir(cleanPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read directory: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">var files []FileInfo
+        for _, entry := range entries </span><span class="cov8" title="1">{
+                info, err := entry.Info()
+                if err != nil </span><span class="cov0" title="0">{
+                        continue</span> // Skip files we can't read
+                }
+
+                <span class="cov8" title="1">fileInfo := FileInfo{
+                        Name:    info.Name(),
+                        Path:    filepath.Join(cleanPath, info.Name()),
+                        Size:    info.Size(),
+                        IsDir:   info.IsDir(),
+                        ModTime: info.ModTime(),
+                        Mode:    info.Mode().String(),
+                }
+                files = append(files, fileInfo)</span>
+        }
+
+        // Sort: directories first, then files, alphabetically
+        <span class="cov8" title="1">sort.Slice(files, func(i, j int) bool </span><span class="cov8" title="1">{
+                if files[i].IsDir != files[j].IsDir </span><span class="cov8" title="1">{
+                        return files[i].IsDir
+                }</span>
+                <span class="cov0" title="0">return strings.ToLower(files[i].Name) &lt; strings.ToLower(files[j].Name)</span>
+        })
+
+        <span class="cov8" title="1">return files, nil</span>
+}
+
+// GetFileInfo gets information about a specific file or directory
+func (s *Service) GetFileInfo(path string) (*FileInfo, error) <span class="cov8" title="1">{
+        if !s.isDriveAllowed(path) </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("access to drive not allowed")
+        }</span>
+
+        <span class="cov8" title="1">cleanPath := filepath.Clean(path)
+        info, err := os.Stat(cleanPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get file info: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;FileInfo{
+                Name:    info.Name(),
+                Path:    cleanPath,
+                Size:    info.Size(),
+                IsDir:   info.IsDir(),
+                ModTime: info.ModTime(),
+                Mode:    info.Mode().String(),
+        }, nil</span>
+}
+
+// DownloadFile prepares a file for download (copies to download directory)
+func (s *Service) DownloadFile(sourcePath string) (string, error) <span class="cov0" title="0">{
+        if !s.config.IsActionAllowed("download") </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("download action not allowed")
+        }</span>
+
+        <span class="cov0" title="0">if !s.isDriveAllowed(sourcePath) </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("access to drive not allowed")
+        }</span>
+
+        <span class="cov0" title="0">cleanPath := filepath.Clean(sourcePath)
+
+        // Check if it's a file
+        info, err := os.Stat(cleanPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("file not found: %w", err)
+        }</span>
+        <span class="cov0" title="0">if info.IsDir() </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("cannot download directory")
+        }</span>
+
+        // Check file size
+        <span class="cov0" title="0">if info.Size() &gt; s.config.FileManager.MaxFileSize </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("file too large (max: %d bytes)", s.config.FileManager.MaxFileSize)
+        }</span>
+
+        // Create download directory if it doesn't exist
+        <span class="cov0" title="0">downloadDir := s.config.FileManager.DownloadPath
+        if err := os.MkdirAll(downloadDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to create download directory: %w", err)
+        }</span>
+
+        // Generate unique filename
+        <span class="cov0" title="0">filename := filepath.Base(cleanPath)
+        timestamp := time.Now().Format("20060102_150405")
+        downloadPath := filepath.Join(downloadDir, fmt.Sprintf("%s_%s", timestamp, filename))
+
+        // Copy file
+        if err := s.copyFile(cleanPath, downloadPath); err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to copy file: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return downloadPath, nil</span>
+}
+
+// UploadFile saves an uploaded file to the upload directory
+func (s *Service) UploadFile(filename string, data io.Reader) (string, error) <span class="cov0" title="0">{
+        if !s.config.IsActionAllowed("upload") </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("upload action not allowed")
+        }</span>
+
+        // Create upload directory if it doesn't exist
+        <span class="cov0" title="0">uploadDir := s.config.FileManager.UploadPath
+        if err := os.MkdirAll(uploadDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to create upload directory: %w", err)
+        }</span>
+
+        // Generate safe filename
+        <span class="cov0" title="0">safeFilename := s.sanitizeFilename(filename)
+        timestamp := time.Now().Format("20060102_150405")
+        uploadPath := filepath.Join(uploadDir, fmt.Sprintf("%s_%s", timestamp, safeFilename))
+
+        // Create file
+        file, err := os.Create(uploadPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to create file: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer file.Close()
+
+        // Copy data with size limit
+        written, err := io.CopyN(file, data, s.config.FileManager.MaxFileSize+1)
+        if err != nil &amp;&amp; err != io.EOF </span><span class="cov0" title="0">{
+                os.Remove(uploadPath) // Clean up on error
+                return "", fmt.Errorf("failed to write file: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if written &gt; s.config.FileManager.MaxFileSize </span><span class="cov0" title="0">{
+                os.Remove(uploadPath) // Clean up oversized file
+                return "", fmt.Errorf("file too large (max: %d bytes)", s.config.FileManager.MaxFileSize)
+        }</span>
+
+        <span class="cov0" title="0">return uploadPath, nil</span>
+}
+
+// DeleteFile deletes a file (if allowed)
+func (s *Service) DeleteFile(path string) error <span class="cov0" title="0">{
+        if !s.config.IsActionAllowed("delete") </span><span class="cov0" title="0">{
+                return fmt.Errorf("delete action not allowed")
+        }</span>
+
+        <span class="cov0" title="0">if !s.isDriveAllowed(path) </span><span class="cov0" title="0">{
+                return fmt.Errorf("access to drive not allowed")
+        }</span>
+
+        <span class="cov0" title="0">cleanPath := filepath.Clean(path)
+
+        // Additional safety check - don't allow deleting system directories
+        if s.isSystemPath(cleanPath) </span><span class="cov0" title="0">{
+                return fmt.Errorf("cannot delete system files/directories")
+        }</span>
+
+        <span class="cov0" title="0">return os.Remove(cleanPath)</span>
+}
+
+// GetParentDirectory returns the parent directory path
+func (s *Service) GetParentDirectory(path string) string <span class="cov8" title="1">{
+        cleanPath := filepath.Clean(path)
+        parent := filepath.Dir(cleanPath)
+        
+        // Don't go above drive root
+        if len(parent) &lt;= 3 &amp;&amp; strings.Contains(parent, ":") </span><span class="cov8" title="1">{
+                return parent
+        }</span>
+        
+        <span class="cov8" title="1">return parent</span>
+}
+
+// GetDirectoryBreadcrumb creates a breadcrumb navigation for the path
+func (s *Service) GetDirectoryBreadcrumb(path string) []string <span class="cov8" title="1">{
+        cleanPath := filepath.Clean(path)
+        parts := strings.Split(cleanPath, string(filepath.Separator))
+        
+        var breadcrumb []string
+        currentPath := ""
+        
+        for i, part := range parts </span><span class="cov8" title="1">{
+                if part == "" </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                
+                <span class="cov8" title="1">if i == 0 &amp;&amp; strings.Contains(part, ":") </span><span class="cov8" title="1">{
+                        // Drive letter
+                        currentPath = part + "\\"
+                }</span> else<span class="cov8" title="1"> {
+                        currentPath = filepath.Join(currentPath, part)
+                }</span>
+                
+                <span class="cov8" title="1">breadcrumb = append(breadcrumb, currentPath)</span>
+        }
+        
+        <span class="cov8" title="1">return breadcrumb</span>
+}
+
+// IsValidPath checks if a path is valid and accessible
+func (s *Service) IsValidPath(path string) bool <span class="cov8" title="1">{
+        if !s.isDriveAllowed(path) </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        
+        <span class="cov8" title="1">cleanPath := filepath.Clean(path)
+        _, err := os.Stat(cleanPath)
+        return err == nil</span>
+}
+
+// GetAvailableDrives returns list of available drives based on configuration
+func (s *Service) GetAvailableDrives() []string <span class="cov8" title="1">{
+        var availableDrives []string
+
+        for _, drive := range s.config.FileManager.AllowedDrives </span><span class="cov8" title="1">{
+                // Check if drive exists and is accessible
+                if _, err := os.Stat(drive + "\\"); err == nil </span><span class="cov8" title="1">{
+                        availableDrives = append(availableDrives, drive)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return availableDrives</span>
+}
+
+// FormatSize formats file size in human-readable format
+func FormatSize(bytes int64) string <span class="cov8" title="1">{
+        const unit = 1024
+        if bytes &lt; unit </span><span class="cov8" title="1">{
+                return fmt.Sprintf("%d B", bytes)
+        }</span>
+        <span class="cov8" title="1">div, exp := int64(unit), 0
+        for n := bytes / unit; n &gt;= unit; n /= unit </span><span class="cov8" title="1">{
+                div *= unit
+                exp++
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])</span>
+}
+
+// Helper methods
+
+func (s *Service) isDriveAllowed(path string) bool <span class="cov8" title="1">{
+        if len(s.config.FileManager.AllowedDrives) == 0 </span><span class="cov8" title="1">{
+                return true // No restrictions
+        }</span>
+
+        // Extract drive letter from path
+        <span class="cov8" title="1">cleanPath := filepath.Clean(path)
+        if len(cleanPath) &gt;= 2 &amp;&amp; cleanPath[1] == ':' </span><span class="cov8" title="1">{
+                drive := strings.ToUpper(cleanPath[:2])
+                return s.config.IsDriveAllowed(drive)
+        }</span>
+
+        // If we can't determine the drive, allow it (might be relative path)
+        <span class="cov8" title="1">return true</span>
+}
+
+func (s *Service) isSystemPath(path string) bool <span class="cov0" title="0">{
+        systemPaths := []string{
+                "C:\\Windows",
+                "C:\\System32",
+                "C:\\Program Files",
+                "C:\\Program Files (x86)",
+                "C:\\ProgramData",
+        }
+
+        cleanPath := strings.ToUpper(filepath.Clean(path))
+        for _, sysPath := range systemPaths </span><span class="cov0" title="0">{
+                if strings.HasPrefix(cleanPath, strings.ToUpper(sysPath)) </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov0" title="0">return false</span>
+}
+
+func (s *Service) sanitizeFilename(filename string) string <span class="cov0" title="0">{
+        // Remove dangerous characters
+        unsafe := []string{"..", "/", "\\", ":", "*", "?", "\"", "&lt;", "&gt;", "|"}
+        safe := filename
+        for _, char := range unsafe </span><span class="cov0" title="0">{
+                safe = strings.ReplaceAll(safe, char, "_")
+        }</span>
+        <span class="cov0" title="0">return safe</span>
+}
+
+func (s *Service) copyFile(src, dst string) error <span class="cov0" title="0">{
+        sourceFile, err := os.Open(src)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer sourceFile.Close()
+
+        destFile, err := os.Create(dst)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer destFile.Close()
+
+        _, err = io.Copy(destFile, sourceFile)
+        return err</span>
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">//go:build windows
+
+package power
+
+import (
+        "errors"
+        "fmt"
+        "sync"
+        "syscall"
+        "time"
+        "unsafe"
+
+        "github.com/cupbot/cupbot/internal/config"
+)
+
+var (
+        advapi32                  = syscall.NewLazyDLL("advapi32.dll")
+        user32                    = syscall.NewLazyDLL("user32.dll")
+        procOpenProcessToken      = advapi32.NewProc("OpenProcessToken")
+        procLookupPrivilegeValue  = advapi32.NewProc("LookupPrivilegeValueW")
+        procAdjustTokenPrivileges = advapi32.NewProc("AdjustTokenPrivileges")
+        procExitWindowsEx         = user32.NewProc("ExitWindowsEx")
+        procAbortSystemShutdown   = advapi32.NewProc("AbortSystemShutdownW")
+        procInitiateSystemShutdown = advapi32.NewProc("InitiateSystemShutdownExW")
+)
+
+const (
+        // Token access rights
+        TOKEN_ADJUST_PRIVILEGES = 0x0020
+        TOKEN_QUERY             = 0x0008
+
+        // Privilege names
+        SE_SHUTDOWN_NAME = "SeShutdownPrivilege"
+
+        // Shutdown flags
+        EWX_LOGOFF   = 0x00000000
+        EWX_SHUTDOWN = 0x00000001
+        EWX_REBOOT   = 0x00000002
+        EWX_FORCE    = 0x00000004
+        EWX_POWEROFF = 0x00000008
+        EWX_FORCEIFHUNG = 0x00000010
+
+        // Shutdown reasons
+        SHTDN_REASON_MAJOR_OTHER = 0x00000000
+        SHTDN_REASON_MINOR_OTHER = 0x00000000
+        SHTDN_REASON_FLAG_PLANNED = 0x80000000
+)
+
+type LUID struct {
+        LowPart  uint32
+        HighPart int32
+}
+
+type TOKEN_PRIVILEGES struct {
+        PrivilegeCount uint32
+        Privileges     [1]LUID_AND_ATTRIBUTES
+}
+
+type LUID_AND_ATTRIBUTES struct {
+        Luid       LUID
+        Attributes uint32
+}
+
+// OperationType represents the type of power operation
+type OperationType string
+
+const (
+        OperationShutdown      OperationType = "shutdown"
+        OperationReboot        OperationType = "reboot"
+        OperationForceShutdown OperationType = "force_shutdown"
+        OperationForceReboot   OperationType = "force_reboot"
+)
+
+// Operation represents a scheduled power operation
+type Operation struct {
+        Type        OperationType `json:"type"`
+        ScheduledAt time.Time     `json:"scheduled_at"`
+        UserID      int64         `json:"user_id"`
+        Message     string        `json:"message"`
+        Timeout     time.Duration `json:"timeout"`
+}
+
+// Service provides power management functionality
+type Service struct {
+        config           *config.Config
+        scheduledOp      *Operation
+        mutex            sync.RWMutex
+        shutdownTimer    *time.Timer
+        privilegesSet    bool
+}
+
+// NewService creates a new power management service
+func NewService(cfg *config.Config) *Service <span class="cov8" title="1">{
+        return &amp;Service{
+                config: cfg,
+        }
+}</span>
+
+// ScheduleShutdown schedules a system shutdown
+func (s *Service) ScheduleShutdown(userID int64, delay time.Duration, force bool) error <span class="cov8" title="1">{
+        s.mutex.Lock()
+        defer s.mutex.Unlock()
+
+        if s.scheduledOp != nil </span><span class="cov0" title="0">{
+                return errors.New("power operation already scheduled")
+        }</span>
+
+        <span class="cov8" title="1">opType := OperationShutdown
+        if force </span><span class="cov8" title="1">{
+                opType = OperationForceShutdown
+        }</span>
+
+        <span class="cov8" title="1">operation := &amp;Operation{
+                Type:        opType,
+                ScheduledAt: time.Now().Add(delay),
+                UserID:      userID,
+                Message:     "System shutdown initiated by CupBot",
+                Timeout:     delay,
+        }
+
+        if delay == 0 </span><span class="cov0" title="0">{
+                // Immediate shutdown
+                return s.executeOperation(operation)
+        }</span>
+
+        // Schedule shutdown
+        <span class="cov8" title="1">s.scheduledOp = operation
+        s.shutdownTimer = time.AfterFunc(delay, func() </span><span class="cov0" title="0">{
+                s.mutex.Lock()
+                defer s.mutex.Unlock()
+                
+                if s.scheduledOp != nil &amp;&amp; s.scheduledOp.Type == operation.Type </span><span class="cov0" title="0">{
+                        s.executeOperation(s.scheduledOp)
+                        s.scheduledOp = nil
+                }</span>
+        })
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// ScheduleReboot schedules a system reboot
+func (s *Service) ScheduleReboot(userID int64, delay time.Duration, force bool) error <span class="cov8" title="1">{
+        s.mutex.Lock()
+        defer s.mutex.Unlock()
+
+        if s.scheduledOp != nil </span><span class="cov8" title="1">{
+                return errors.New("power operation already scheduled")
+        }</span>
+
+        <span class="cov8" title="1">opType := OperationReboot
+        if force </span><span class="cov8" title="1">{
+                opType = OperationForceReboot
+        }</span>
+
+        <span class="cov8" title="1">operation := &amp;Operation{
+                Type:        opType,
+                ScheduledAt: time.Now().Add(delay),
+                UserID:      userID,
+                Message:     "System reboot initiated by CupBot",
+                Timeout:     delay,
+        }
+
+        if delay == 0 </span><span class="cov0" title="0">{
+                // Immediate reboot
+                return s.executeOperation(operation)
+        }</span>
+
+        // Schedule reboot
+        <span class="cov8" title="1">s.scheduledOp = operation
+        s.shutdownTimer = time.AfterFunc(delay, func() </span><span class="cov0" title="0">{
+                s.mutex.Lock()
+                defer s.mutex.Unlock()
+                
+                if s.scheduledOp != nil &amp;&amp; s.scheduledOp.Type == operation.Type </span><span class="cov0" title="0">{
+                        s.executeOperation(s.scheduledOp)
+                        s.scheduledOp = nil
+                }</span>
+        })
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// CancelScheduledOperation cancels any scheduled power operation
+func (s *Service) CancelScheduledOperation() error <span class="cov8" title="1">{
+        s.mutex.Lock()
+        defer s.mutex.Unlock()
+
+        if s.scheduledOp == nil </span><span class="cov8" title="1">{
+                return errors.New("no power operation scheduled")
+        }</span>
+
+        <span class="cov8" title="1">if s.shutdownTimer != nil </span><span class="cov8" title="1">{
+                s.shutdownTimer.Stop()
+                s.shutdownTimer = nil
+        }</span>
+
+        // Try to abort system shutdown if it was initiated with InitiateSystemShutdown
+        <span class="cov8" title="1">ret, _, _ := procAbortSystemShutdown.Call(0) // NULL for local computer
+        if ret == 0 </span>{<span class="cov8" title="1">
+                // If abort fails, the shutdown may have been initiated with ExitWindowsEx
+                // In that case, we can only notify that cancellation attempt was made
+        }</span>
+
+        <span class="cov8" title="1">s.scheduledOp = nil
+        return nil</span>
+}
+
+// GetScheduledOperation returns the currently scheduled operation
+func (s *Service) GetScheduledOperation() *Operation <span class="cov8" title="1">{
+        s.mutex.RLock()
+        defer s.mutex.RUnlock()
+
+        if s.scheduledOp == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        // Return a copy to avoid race conditions
+        <span class="cov8" title="1">op := *s.scheduledOp
+        return &amp;op</span>
+}
+
+// executeOperation executes the power operation
+func (s *Service) executeOperation(op *Operation) error <span class="cov0" title="0">{
+        if err := s.setShutdownPrivileges(); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to set shutdown privileges: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">var flags uint32
+
+        switch op.Type </span>{
+        case OperationShutdown:<span class="cov0" title="0">
+                flags = EWX_SHUTDOWN | EWX_POWEROFF</span>
+        case OperationReboot:<span class="cov0" title="0">
+                flags = EWX_REBOOT</span>
+        case OperationForceShutdown:<span class="cov0" title="0">
+                flags = EWX_SHUTDOWN | EWX_POWEROFF | EWX_FORCE</span>
+        case OperationForceReboot:<span class="cov0" title="0">
+                flags = EWX_REBOOT | EWX_FORCE</span>
+        default:<span class="cov0" title="0">
+                return fmt.Errorf("unknown operation type: %s", op.Type)</span>
+        }
+
+        // Use InitiateSystemShutdown for better control and cancellation support
+        <span class="cov0" title="0">if op.Type == OperationShutdown || op.Type == OperationReboot </span><span class="cov0" title="0">{
+                messagePtr, _ := syscall.UTF16PtrFromString(op.Message)
+                timeoutSeconds := uint32(op.Timeout.Seconds())
+                forceApps := uint32(0)
+                if op.Type == OperationForceShutdown || op.Type == OperationForceReboot </span><span class="cov0" title="0">{
+                        forceApps = 1
+                }</span>
+                <span class="cov0" title="0">rebootAfterShutdown := uint32(0)
+                if op.Type == OperationReboot || op.Type == OperationForceReboot </span><span class="cov0" title="0">{
+                        rebootAfterShutdown = 1
+                }</span>
+
+                <span class="cov0" title="0">ret, _, err := procInitiateSystemShutdown.Call(
+                        0, // NULL for local computer
+                        uintptr(unsafe.Pointer(messagePtr)),
+                        uintptr(timeoutSeconds),
+                        uintptr(forceApps),
+                        uintptr(rebootAfterShutdown),
+                )
+                if ret == 0 </span><span class="cov0" title="0">{
+                        return fmt.Errorf("InitiateSystemShutdown failed: %v", err)
+                }</span>
+        } else<span class="cov0" title="0"> {
+                // Use ExitWindowsEx for force operations
+                ret, _, err := procExitWindowsEx.Call(
+                        uintptr(flags),
+                        uintptr(SHTDN_REASON_MAJOR_OTHER|SHTDN_REASON_MINOR_OTHER|SHTDN_REASON_FLAG_PLANNED),
+                )
+                if ret == 0 </span><span class="cov0" title="0">{
+                        return fmt.Errorf("ExitWindowsEx failed: %v", err)
+                }</span>
+        }
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// setShutdownPrivileges enables shutdown privileges for the current process
+func (s *Service) setShutdownPrivileges() error <span class="cov0" title="0">{
+        if s.privilegesSet </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov0" title="0">var token syscall.Handle
+        currentProcess := syscall.Handle(^uintptr(0)) // GetCurrentProcess() equivalent
+
+        // Open process token
+        ret, _, err := procOpenProcessToken.Call(
+                uintptr(currentProcess),
+                TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY,
+                uintptr(unsafe.Pointer(&amp;token)),
+        )
+        if ret == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("OpenProcessToken failed: %v", err)
+        }</span>
+        <span class="cov0" title="0">defer syscall.CloseHandle(token)
+
+        // Lookup shutdown privilege
+        var luid LUID
+        privilegeName, _ := syscall.UTF16PtrFromString(SE_SHUTDOWN_NAME)
+        ret, _, err = procLookupPrivilegeValue.Call(
+                0, // NULL for local system
+                uintptr(unsafe.Pointer(privilegeName)),
+                uintptr(unsafe.Pointer(&amp;luid)),
+        )
+        if ret == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("LookupPrivilegeValue failed: %v", err)
+        }</span>
+
+        // Adjust token privileges
+        <span class="cov0" title="0">tp := TOKEN_PRIVILEGES{
+                PrivilegeCount: 1,
+                Privileges: [1]LUID_AND_ATTRIBUTES{
+                        {
+                                Luid:       luid,
+                                Attributes: 0x00000002, // SE_PRIVILEGE_ENABLED
+                        },
+                },
+        }
+
+        ret, _, err = procAdjustTokenPrivileges.Call(
+                uintptr(token),
+                0, // FALSE - don't disable all privileges
+                uintptr(unsafe.Pointer(&amp;tp)),
+                0, // BufferLength
+                0, // PreviousState
+                0, // ReturnLength
+        )
+        if ret == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("AdjustTokenPrivileges failed: %v", err)
+        }</span>
+
+        <span class="cov0" title="0">s.privilegesSet = true
+        return nil</span>
+}
+
+// GetPowerStatus returns information about the current power state
+func (s *Service) GetPowerStatus() map[string]interface{} <span class="cov8" title="1">{
+        s.mutex.RLock()
+        defer s.mutex.RUnlock()
+
+        status := map[string]interface{}{
+                "privileges_set": s.privilegesSet,
+                "scheduled_operation": nil,
+        }
+
+        if s.scheduledOp != nil </span><span class="cov0" title="0">{
+                status["scheduled_operation"] = map[string]interface{}{
+                        "type":         string(s.scheduledOp.Type),
+                        "scheduled_at": s.scheduledOp.ScheduledAt,
+                        "user_id":      s.scheduledOp.UserID,
+                        "timeout":      s.scheduledOp.Timeout.String(),
+                }
+        }</span>
+
+        <span class="cov8" title="1">return status</span>
+}</pre>
+		
+		<pre class="file" id="file7" style="display: none">//go:build windows
+
+package screenshot
+
+import (
+        "fmt"
+        "image"
+        "image/jpeg"
+        "image/png"
+        "os"
+        "path/filepath"
+        "syscall"
+        "time"
+        "unsafe"
+
+        "github.com/cupbot/cupbot/internal/config"
+)
+
+var (
+        user32                     = syscall.NewLazyDLL("user32.dll")
+        gdi32                      = syscall.NewLazyDLL("gdi32.dll")
+        kernel32                   = syscall.NewLazyDLL("kernel32.dll")
+        procGetSystemMetrics       = user32.NewProc("GetSystemMetrics")
+        procGetDC                  = user32.NewProc("GetDC")
+        procCreateCompatibleDC     = gdi32.NewProc("CreateCompatibleDC")
+        procCreateCompatibleBitmap = gdi32.NewProc("CreateCompatibleBitmap")
+        procSelectObject           = gdi32.NewProc("SelectObject")
+        procBitBlt                 = gdi32.NewProc("BitBlt")
+        procGetDIBits              = gdi32.NewProc("GetDIBits")
+        procDeleteObject           = gdi32.NewProc("DeleteObject")
+        procDeleteDC               = gdi32.NewProc("DeleteDC")
+        procReleaseDC              = user32.NewProc("ReleaseDC")
+        procGetCurrentProcessId    = kernel32.NewProc("GetCurrentProcessId")
+        procProcessIdToSessionId   = kernel32.NewProc("ProcessIdToSessionId")
+)
+
+const (
+        SM_CXSCREEN = 0
+        SM_CYSCREEN = 1
+        SRCCOPY     = 0x00CC0020
+        BI_RGB      = 0
+)
+
+type BITMAPINFOHEADER struct {
+        BiSize          uint32
+        BiWidth         int32
+        BiHeight        int32
+        BiPlanes        uint16
+        BiBitCount      uint16
+        BiCompression   uint32
+        BiSizeImage     uint32
+        BiXPelsPerMeter int32
+        BiYPelsPerMeter int32
+        BiClrUsed       uint32
+        BiClrImportant  uint32
+}
+
+// Service provides screenshot functionality
+type Service struct {
+        config *config.Config
+}
+
+// NewService creates a new screenshot service
+func NewService(cfg *config.Config) *Service <span class="cov0" title="0">{
+        return &amp;Service{
+                config: cfg,
+        }
+}</span>
+
+// TakeScreenshot captures the desktop and saves it as an image file
+func (s *Service) TakeScreenshot() (string, error) <span class="cov0" title="0">{
+        if !s.config.Screenshot.Enabled </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("screenshot functionality is disabled")
+        }</span>
+
+        // Check if running as Windows Service (Session 0)
+        <span class="cov0" title="0">if s.isRunningAsService() </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("screenshots are not available when running as Windows Service - run in interactive mode instead")
+        }</span>
+
+        // Get screen dimensions
+        <span class="cov0" title="0">width, _, _ := procGetSystemMetrics.Call(SM_CXSCREEN)
+        height, _, _ := procGetSystemMetrics.Call(SM_CYSCREEN)
+        screenWidth := int(width)
+        screenHeight := int(height)
+
+        if screenWidth == 0 || screenHeight == 0 </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("no desktop session available - ensure running in interactive mode")
+        }</span>
+
+        // Apply size limits from configuration
+        <span class="cov0" title="0">if s.config.Screenshot.MaxWidth &gt; 0 &amp;&amp; screenWidth &gt; s.config.Screenshot.MaxWidth </span><span class="cov0" title="0">{
+                screenHeight = screenHeight * s.config.Screenshot.MaxWidth / screenWidth
+                screenWidth = s.config.Screenshot.MaxWidth
+        }</span>
+        <span class="cov0" title="0">if s.config.Screenshot.MaxHeight &gt; 0 &amp;&amp; screenHeight &gt; s.config.Screenshot.MaxHeight </span><span class="cov0" title="0">{
+                screenWidth = screenWidth * s.config.Screenshot.MaxHeight / screenHeight
+                screenHeight = s.config.Screenshot.MaxHeight
+        }</span>
+
+        // Create bitmap and capture screen
+        <span class="cov0" title="0">bitmap, err := s.captureScreen(screenWidth, screenHeight)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to capture screen: %w", err)
+        }</span>
+
+        // Create storage directory if it doesn't exist
+        <span class="cov0" title="0">storageDir := s.config.Screenshot.StoragePath
+        if err := os.MkdirAll(storageDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to create storage directory: %w", err)
+        }</span>
+
+        // Generate filename with timestamp
+        <span class="cov0" title="0">timestamp := time.Now().Format("20060102_150405")
+        filename := fmt.Sprintf("screenshot_%s.%s", timestamp, s.config.Screenshot.Format)
+        filepath := filepath.Join(storageDir, filename)
+
+        // Save image
+        if err := s.saveImage(bitmap, filepath, screenWidth, screenHeight); err != nil </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("failed to save screenshot: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">return filepath, nil</span>
+}
+
+// captureScreen captures the screen and returns the bitmap data
+func (s *Service) captureScreen(width, height int) ([]byte, error) <span class="cov0" title="0">{
+        // Get the device context of the screen
+        hdcScreen, _, _ := procGetDC.Call(0)
+        if hdcScreen == 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get screen DC")
+        }</span>
+        <span class="cov0" title="0">defer procReleaseDC.Call(0, hdcScreen)
+
+        // Create a compatible device context
+        hdcMem, _, _ := procCreateCompatibleDC.Call(hdcScreen)
+        if hdcMem == 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create compatible DC")
+        }</span>
+        <span class="cov0" title="0">defer procDeleteDC.Call(hdcMem)
+
+        // Create a compatible bitmap
+        hbmScreen, _, _ := procCreateCompatibleBitmap.Call(hdcScreen, uintptr(width), uintptr(height))
+        if hbmScreen == 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create compatible bitmap")
+        }</span>
+        <span class="cov0" title="0">defer procDeleteObject.Call(hbmScreen)
+
+        // Select the bitmap into the memory device context
+        procSelectObject.Call(hdcMem, hbmScreen)
+
+        // Copy the screen to the memory device context
+        success, _, _ := procBitBlt.Call(
+                hdcMem, 0, 0, uintptr(width), uintptr(height),
+                hdcScreen, 0, 0, SRCCOPY)
+        if success == 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to copy screen")
+        }</span>
+
+        // Prepare bitmap info structure
+        <span class="cov0" title="0">bmi := BITMAPINFOHEADER{
+                BiSize:        40,
+                BiWidth:       int32(width),
+                BiHeight:      -int32(height), // Negative for top-down bitmap
+                BiPlanes:      1,
+                BiBitCount:    24, // 24-bit RGB
+                BiCompression: BI_RGB,
+        }
+
+        // Calculate bitmap size
+        stride := ((width*3 + 3) / 4) * 4 // 4-byte alignment
+        bitmapSize := stride * height
+        bitmap := make([]byte, bitmapSize)
+
+        // Get bitmap bits
+        ret, _, _ := procGetDIBits.Call(
+                hdcScreen,
+                hbmScreen,
+                0,
+                uintptr(height),
+                uintptr(unsafe.Pointer(&amp;bitmap[0])),
+                uintptr(unsafe.Pointer(&amp;bmi)),
+                0) // DIB_RGB_COLORS = 0
+        if ret == 0 </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get bitmap bits")
+        }</span>
+
+        <span class="cov0" title="0">return bitmap, nil</span>
+}
+
+// saveImage saves the bitmap data as an image file
+func (s *Service) saveImage(bitmap []byte, filepath string, width, height int) error <span class="cov0" title="0">{
+        // Convert bitmap to image.Image
+        img := s.bitmapToImage(bitmap, width, height)
+
+        // Create file
+        file, err := os.Create(filepath)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov0" title="0">defer file.Close()
+
+        // Save based on format
+        switch s.config.Screenshot.Format </span>{
+        case "jpg", "jpeg":<span class="cov0" title="0">
+                return jpeg.Encode(file, img, &amp;jpeg.Options{Quality: s.config.Screenshot.Quality})</span>
+        case "png":<span class="cov0" title="0">
+                return png.Encode(file, img)</span>
+        default:<span class="cov0" title="0">
+                return fmt.Errorf("unsupported image format: %s", s.config.Screenshot.Format)</span>
+        }
+}
+
+// bitmapToImage converts bitmap data to image.Image
+func (s *Service) bitmapToImage(bitmap []byte, width, height int) image.Image <span class="cov0" title="0">{
+        stride := ((width*3 + 3) / 4) * 4
+        img := image.NewRGBA(image.Rect(0, 0, width, height))
+
+        for y := 0; y &lt; height; y++ </span><span class="cov0" title="0">{
+                for x := 0; x &lt; width; x++ </span><span class="cov0" title="0">{
+                        bitmapOffset := y*stride + x*3
+                        imageOffset := (y*width + x) * 4
+
+                        // Bitmap is BGR, convert to RGBA
+                        if bitmapOffset+2 &lt; len(bitmap) </span><span class="cov0" title="0">{
+                                img.Pix[imageOffset+0] = bitmap[bitmapOffset+2] // R
+                                img.Pix[imageOffset+1] = bitmap[bitmapOffset+1] // G
+                                img.Pix[imageOffset+2] = bitmap[bitmapOffset+0] // B
+                                img.Pix[imageOffset+3] = 255                    // A
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">return img</span>
+}
+
+// GetScreenshotList returns a list of available screenshots
+func (s *Service) GetScreenshotList() ([]ScreenshotInfo, error) <span class="cov0" title="0">{
+        storageDir := s.config.Screenshot.StoragePath
+
+        entries, err := os.ReadDir(storageDir)
+        if err != nil </span><span class="cov0" title="0">{
+                if os.IsNotExist(err) </span><span class="cov0" title="0">{
+                        return []ScreenshotInfo{}, nil // Empty list if directory doesn't exist
+                }</span>
+                <span class="cov0" title="0">return nil, fmt.Errorf("failed to read screenshot directory: %w", err)</span>
+        }
+
+        <span class="cov0" title="0">var screenshots []ScreenshotInfo
+        for _, entry := range entries </span><span class="cov0" title="0">{
+                if entry.IsDir() </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">info, err := entry.Info()
+                if err != nil </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">screenshot := ScreenshotInfo{
+                        Name:    info.Name(),
+                        Path:    filepath.Join(storageDir, info.Name()),
+                        Size:    info.Size(),
+                        ModTime: info.ModTime(),
+                }
+                screenshots = append(screenshots, screenshot)</span>
+        }
+
+        <span class="cov0" title="0">return screenshots, nil</span>
+}
+
+// DeleteScreenshot deletes a screenshot file
+func (s *Service) DeleteScreenshot(filename string) error <span class="cov0" title="0">{
+        // Validate filename to prevent path traversal
+        if filepath.Dir(filename) != "." </span><span class="cov0" title="0">{
+                return fmt.Errorf("invalid filename")
+        }</span>
+
+        <span class="cov0" title="0">filePath := filepath.Join(s.config.Screenshot.StoragePath, filename)
+        return os.Remove(filePath)</span>
+}
+
+// ScreenshotInfo contains information about a screenshot file
+type ScreenshotInfo struct {
+        Name    string    `json:"name"`
+        Path    string    `json:"path"`
+        Size    int64     `json:"size"`
+        ModTime time.Time `json:"mod_time"`
+}
+
+// isRunningAsService checks if the process is running as a Windows Service (Session 0)
+func (s *Service) isRunningAsService() bool <span class="cov0" title="0">{
+        // Get current process ID
+        pid, _, _ := procGetCurrentProcessId.Call()
+        
+        // Get session ID for current process
+        var sessionId uint32
+        ret, _, _ := procProcessIdToSessionId.Call(pid, uintptr(unsafe.Pointer(&amp;sessionId)))
+        
+        // If the call failed or session ID is 0, we're likely running as a service
+        return ret == 0 || sessionId == 0
+}</span>
+</pre>
+		
+		<pre class="file" id="file8" style="display: none">//go:build windows
+
+package service
+
+import (
+        "context"
+        "fmt"
+        "log"
+        "os"
+        "os/signal"
+        "path/filepath"
+        "syscall"
+        "time"
+
+        "github.com/cupbot/cupbot/internal/bot"
+        "github.com/cupbot/cupbot/internal/config"
+        "github.com/cupbot/cupbot/internal/database"
+        "golang.org/x/sys/windows/svc"
+        "golang.org/x/sys/windows/svc/debug"
+        "golang.org/x/sys/windows/svc/eventlog"
+)
+
+var elog debug.Log
+
+type cupBotService struct {
+        bot    *bot.Bot
+        db     *database.DB
+        ctx    context.Context
+        cancel context.CancelFunc
+}
+
+func (m *cupBotService) Execute(args []string, r &lt;-chan svc.ChangeRequest, changes chan&lt;- svc.Status) (ssec bool, errno uint32) <span class="cov0" title="0">{
+        const cmdsAccepted = svc.AcceptStop | svc.AcceptShutdown | svc.AcceptPauseAndContinue
+        changes &lt;- svc.Status{State: svc.StartPending}
+
+        // Initialize the service
+        if err := m.start(); err != nil </span><span class="cov0" title="0">{
+                elog.Error(1, fmt.Sprintf("Failed to start CupBot: %v", err))
+                return false, 1
+        }</span>
+
+        <span class="cov0" title="0">changes &lt;- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+        elog.Info(1, "CupBot service started successfully")
+
+loop:
+        for </span><span class="cov0" title="0">{
+                select </span>{
+                case c := &lt;-r:<span class="cov0" title="0">
+                        switch c.Cmd </span>{
+                        case svc.Interrogate:<span class="cov0" title="0">
+                                changes &lt;- c.CurrentStatus
+                                // Testing deadlock from https://code.google.com/p/winsvc/issues/detail?id=4
+                                time.Sleep(100 * time.Millisecond)
+                                changes &lt;- c.CurrentStatus</span>
+                        case svc.Stop, svc.Shutdown:<span class="cov0" title="0">
+                                elog.Info(1, "CupBot service stopping...")
+                                m.stop()
+                                break loop</span>
+                        case svc.Pause:<span class="cov0" title="0">
+                                changes &lt;- svc.Status{State: svc.Paused, Accepts: cmdsAccepted}
+                                elog.Info(1, "CupBot service paused")</span>
+                        case svc.Continue:<span class="cov0" title="0">
+                                changes &lt;- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
+                                elog.Info(1, "CupBot service resumed")</span>
+                        default:<span class="cov0" title="0">
+                                elog.Error(1, fmt.Sprintf("Unexpected control request #%d", c))</span>
+                        }
+                case &lt;-m.ctx.Done():<span class="cov0" title="0">
+                        break loop</span>
+                }
+        }
+
+        <span class="cov0" title="0">changes &lt;- svc.Status{State: svc.StopPending}
+        elog.Info(1, "CupBot service stopped")
+        return false, 0</span>
+}
+
+func (m *cupBotService) start() error <span class="cov0" title="0">{
+        // Get executable directory for config file
+        execPath, err := os.Executable()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get executable path: %w", err)
+        }</span>
+        <span class="cov0" title="0">execDir := filepath.Dir(execPath)
+        configPath := filepath.Join(execDir, "config", "config.yaml")
+
+        // Load configuration
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to load config: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if cfg.Bot.Token == "" </span><span class="cov0" title="0">{
+                return fmt.Errorf("bot token is required")
+        }</span>
+
+        // Initialize database
+        <span class="cov0" title="0">dbPath := cfg.Database.Path
+        if !filepath.IsAbs(dbPath) </span><span class="cov0" title="0">{
+                dbPath = filepath.Join(execDir, dbPath)
+        }</span>
+
+        <span class="cov0" title="0">m.db, err = database.New(dbPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to initialize database: %w", err)
+        }</span>
+
+        // Create bot
+        <span class="cov0" title="0">m.bot, err = bot.New(cfg, m.db)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create bot: %w", err)
+        }</span>
+
+        // Create context for graceful shutdown
+        <span class="cov0" title="0">m.ctx, m.cancel = context.WithCancel(context.Background())
+
+        // Start bot in a goroutine
+        go func() </span><span class="cov0" title="0">{
+                if err := m.bot.Start(); err != nil </span><span class="cov0" title="0">{
+                        elog.Error(1, fmt.Sprintf("Bot error: %v", err))
+                }</span>
+        }()
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+func (m *cupBotService) stop() <span class="cov0" title="0">{
+        if m.cancel != nil </span><span class="cov0" title="0">{
+                m.cancel()
+        }</span>
+        <span class="cov0" title="0">if m.bot != nil </span><span class="cov0" title="0">{
+                m.bot.Stop()
+        }</span>
+        <span class="cov0" title="0">if m.db != nil </span><span class="cov0" title="0">{
+                m.db.Close()
+        }</span>
+}
+
+func RunService(name string, isDebug bool) error <span class="cov0" title="0">{
+        var err error
+        if isDebug </span><span class="cov0" title="0">{
+                elog = debug.New(name)
+        }</span> else<span class="cov0" title="0"> {
+                elog, err = eventlog.Open(name)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+        }
+        <span class="cov0" title="0">defer elog.Close()
+
+        elog.Info(1, fmt.Sprintf("Starting %s service", name))
+
+        service := &amp;cupBotService{}
+
+        if isDebug </span><span class="cov0" title="0">{
+                err = debug.Run(name, service)
+        }</span> else<span class="cov0" title="0"> {
+                err = svc.Run(name, service)
+        }</span>
+
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                elog.Error(1, fmt.Sprintf("%s service failed: %v", name, err))
+                return err
+        }</span>
+
+        <span class="cov0" title="0">elog.Info(1, fmt.Sprintf("%s service stopped", name))
+        return nil</span>
+}
+
+func RunInteractive() error <span class="cov0" title="0">{
+        // Get executable directory for config file
+        execPath, err := os.Executable()
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to get executable path: %w", err)
+        }</span>
+        <span class="cov0" title="0">execDir := filepath.Dir(execPath)
+        configPath := filepath.Join(execDir, "config", "config.yaml")
+
+        // Load configuration
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to load config: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if cfg.Bot.Token == "" </span><span class="cov0" title="0">{
+                return fmt.Errorf("bot token is required")
+        }</span>
+
+        // Initialize database
+        <span class="cov0" title="0">dbPath := cfg.Database.Path
+        if !filepath.IsAbs(dbPath) </span><span class="cov0" title="0">{
+                dbPath = filepath.Join(execDir, dbPath)
+        }</span>
+
+        <span class="cov0" title="0">db, err := database.New(dbPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to initialize database: %w", err)
+        }</span>
+        <span class="cov0" title="0">defer db.Close()
+
+        // Create bot
+        cupBot, err := bot.New(cfg, db)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create bot: %w", err)
+        }</span>
+
+        // Handle signals for graceful shutdown
+        <span class="cov0" title="0">sigChan := make(chan os.Signal, 1)
+        signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+        // Start bot in goroutine
+        go func() </span><span class="cov0" title="0">{
+                if err := cupBot.Start(); err != nil </span><span class="cov0" title="0">{
+                        log.Printf("Bot error: %v", err)
+                }</span>
+        }()
+
+        <span class="cov0" title="0">log.Println("CupBot is running. Press Ctrl+C to stop.")
+
+        // Wait for shutdown signal
+        &lt;-sigChan
+        log.Println("Shutting down...")
+
+        // Stop bot gracefully
+        cupBot.Stop()
+        log.Println("Bot stopped successfully")
+
+        return nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file9" style="display: none">package system
+
+import (
+        "fmt"
+        "runtime"
+        "time"
+
+        "github.com/shirou/gopsutil/v3/cpu"
+        "github.com/shirou/gopsutil/v3/disk"
+        "github.com/shirou/gopsutil/v3/host"
+        "github.com/shirou/gopsutil/v3/load"
+        "github.com/shirou/gopsutil/v3/mem"
+        "github.com/shirou/gopsutil/v3/net"
+)
+
+// SystemInfo содержит информацию о системе
+type SystemInfo struct {
+        Hostname     string        `json:"hostname"`
+        OS           string        `json:"os"`
+        Platform     string        `json:"platform"`
+        Uptime       time.Duration `json:"uptime"`
+        BootTime     time.Time     `json:"boot_time"`
+        CPUInfo      CPUInfo       `json:"cpu_info"`
+        MemoryInfo   MemoryInfo    `json:"memory_info"`
+        DiskInfo     []DiskInfo    `json:"disk_info"`
+        NetworkInfo  []NetworkInfo `json:"network_info"`
+        ProcessCount uint64        `json:"process_count"`
+}
+
+type CPUInfo struct {
+        ModelName   string    `json:"model_name"`
+        Cores       int       `json:"cores"`
+        Usage       []float64 `json:"usage"`
+        Temperature float64   `json:"temperature"`
+}
+
+type MemoryInfo struct {
+        Total       uint64  `json:"total"`
+        Available   uint64  `json:"available"`
+        Used        uint64  `json:"used"`
+        UsedPercent float64 `json:"used_percent"`
+}
+
+type DiskInfo struct {
+        Device      string  `json:"device"`
+        Mountpoint  string  `json:"mountpoint"`
+        Fstype      string  `json:"fstype"`
+        Total       uint64  `json:"total"`
+        Free        uint64  `json:"free"`
+        Used        uint64  `json:"used"`
+        UsedPercent float64 `json:"used_percent"`
+}
+
+type NetworkInfo struct {
+        Name      string `json:"name"`
+        BytesSent uint64 `json:"bytes_sent"`
+        BytesRecv uint64 `json:"bytes_recv"`
+}
+
+// Service предоставляет методы для получения системной информации
+type Service struct{}
+
+// NewService создает новый экземпляр сервиса
+func NewService() *Service <span class="cov8" title="1">{
+        return &amp;Service{}
+}</span>
+
+// GetSystemInfo получает полную информацию о системе
+func (s *Service) GetSystemInfo() (*SystemInfo, error) <span class="cov8" title="1">{
+        info := &amp;SystemInfo{}
+
+        // Информация о хосте
+        hostInfo, err := host.Info()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get host info: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">info.Hostname = hostInfo.Hostname
+        info.OS = hostInfo.OS
+        info.Platform = hostInfo.Platform
+        info.Uptime = time.Duration(hostInfo.Uptime) * time.Second
+        info.BootTime = time.Unix(int64(hostInfo.BootTime), 0)
+        info.ProcessCount = hostInfo.Procs
+
+        // Информация о CPU
+        cpuInfo, err := s.getCPUInfo()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get CPU info: %w", err)
+        }</span>
+        <span class="cov8" title="1">info.CPUInfo = *cpuInfo
+
+        // Информация о памяти
+        memInfo, err := s.getMemoryInfo()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get memory info: %w", err)
+        }</span>
+        <span class="cov8" title="1">info.MemoryInfo = *memInfo
+
+        // Информация о дисках
+        diskInfo, err := s.getDiskInfo()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get disk info: %w", err)
+        }</span>
+        <span class="cov8" title="1">info.DiskInfo = diskInfo
+
+        // Информация о сети
+        netInfo, err := s.getNetworkInfo()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to get network info: %w", err)
+        }</span>
+        <span class="cov8" title="1">info.NetworkInfo = netInfo
+
+        return info, nil</span>
+}
+
+func (s *Service) getCPUInfo() (*CPUInfo, error) <span class="cov8" title="1">{
+        cpuInfos, err := cpu.Info()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">info := &amp;CPUInfo{
+                Cores: runtime.NumCPU(),
+        }
+
+        if len(cpuInfos) &gt; 0 </span><span class="cov8" title="1">{
+                info.ModelName = cpuInfos[0].ModelName
+        }</span>
+
+        // Получение загрузки CPU
+        <span class="cov8" title="1">percentages, err := cpu.Percent(time.Second, true)
+        if err == nil </span><span class="cov8" title="1">{
+                info.Usage = percentages
+        }</span>
+
+        // Попытка получить температуру (может не работать на Windows)
+        <span class="cov8" title="1">temps, err := host.SensorsTemperatures()
+        if err == nil &amp;&amp; len(temps) &gt; 0 </span><span class="cov0" title="0">{
+                for _, temp := range temps </span><span class="cov0" title="0">{
+                        if temp.SensorKey == "cpu" </span><span class="cov0" title="0">{
+                                info.Temperature = temp.Temperature
+                                break</span>
+                        }
+                }
+        }
+
+        <span class="cov8" title="1">return info, nil</span>
+}
+
+func (s *Service) getMemoryInfo() (*MemoryInfo, error) <span class="cov8" title="1">{
+        memStat, err := mem.VirtualMemory()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;MemoryInfo{
+                Total:       memStat.Total,
+                Available:   memStat.Available,
+                Used:        memStat.Used,
+                UsedPercent: memStat.UsedPercent,
+        }, nil</span>
+}
+
+func (s *Service) getDiskInfo() ([]DiskInfo, error) <span class="cov8" title="1">{
+        partitions, err := disk.Partitions(false)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var diskInfos []DiskInfo
+        for _, partition := range partitions </span><span class="cov8" title="1">{
+                usage, err := disk.Usage(partition.Mountpoint)
+                if err != nil </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">diskInfos = append(diskInfos, DiskInfo{
+                        Device:      partition.Device,
+                        Mountpoint:  partition.Mountpoint,
+                        Fstype:      partition.Fstype,
+                        Total:       usage.Total,
+                        Free:        usage.Free,
+                        Used:        usage.Used,
+                        UsedPercent: usage.UsedPercent,
+                })</span>
+        }
+
+        <span class="cov8" title="1">return diskInfos, nil</span>
+}
+
+func (s *Service) getNetworkInfo() ([]NetworkInfo, error) <span class="cov8" title="1">{
+        netStats, err := net.IOCounters(true)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var netInfos []NetworkInfo
+        for _, stat := range netStats </span><span class="cov8" title="1">{
+                netInfos = append(netInfos, NetworkInfo{
+                        Name:      stat.Name,
+                        BytesSent: stat.BytesSent,
+                        BytesRecv: stat.BytesRecv,
+                })
+        }</span>
+
+        <span class="cov8" title="1">return netInfos, nil</span>
+}
+
+// GetUptime возвращает время работы системы
+func (s *Service) GetUptime() (time.Duration, error) <span class="cov8" title="1">{
+        hostInfo, err := host.Info()
+        if err != nil </span><span class="cov0" title="0">{
+                return 0, err
+        }</span>
+        <span class="cov8" title="1">return time.Duration(hostInfo.Uptime) * time.Second, nil</span>
+}
+
+// GetLoadAverage возвращает среднюю загрузку системы
+func (s *Service) GetLoadAverage() ([]float64, error) <span class="cov8" title="1">{
+        loadStat, err := load.Avg()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return []float64{loadStat.Load1, loadStat.Load5, loadStat.Load15}, nil</span>
+}
+
+// FormatBytes форматирует байты в читаемый формат
+func FormatBytes(bytes uint64) string <span class="cov8" title="1">{
+        const unit = 1024
+        if bytes &lt; unit </span><span class="cov8" title="1">{
+                return fmt.Sprintf("%d B", bytes)
+        }</span>
+        <span class="cov8" title="1">div, exp := int64(unit), 0
+        for n := bytes / unit; n &gt;= unit; n /= unit </span><span class="cov8" title="1">{
+                div *= unit
+                exp++
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

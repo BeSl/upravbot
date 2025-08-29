@@ -314,6 +314,22 @@ go mod tidy
 go mod verify
 ```
 
+#### YAML Import Issues
+```go
+// Problem: golangci-lint reports "undefined: yaml"
+// Error: internal/config/config.go:69:13: undefined: yaml (typecheck)
+
+// Solution: Use explicit import alias
+import (
+    yaml "gopkg.in/yaml.v3"  // Explicit alias
+)
+
+// Instead of:
+import (
+    "gopkg.in/yaml.v3"  // Implicit package name
+)
+```
+
 #### golangci-lint Version Compatibility Issues
 ```yaml
 # Problem: golangci-lint v2.4.0+ has breaking changes
