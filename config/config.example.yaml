@@ -1,0 +1,93 @@
+bot:
+  # Токен вашего Telegram бота (получите у @BotFather)
+  # Или установите переменную окружения BOT_TOKEN
+  token: ""
+  
+  # Включить отладочные сообщения (true/false)
+  debug: false
+
+database:
+  # Путь к файлу базы данных SQLite
+  # База данных создается автоматически при первом запуске
+  path: "cupbot.db"
+
+users:
+  # Список ID администраторов (обязательно!)
+  # Получите ваш ID у @userinfobot
+  admin_user_ids: []
+  
+  # Список разрешенных пользователей (необязательно)
+  # Если список пуст, то доступ имеют только администраторы
+  allowed_users: []
+
+file_manager:
+  # Разрешенные диски для файлового менеджера
+  allowed_drives: ["C:", "D:"]
+  
+  # Максимальный размер загружаемого файла (в байтах)
+  max_file_size: 10485760  # 10MB
+  
+  # Разрешенные действия: list, download, upload, delete
+  allowed_actions: ["list", "download"]
+  
+  # Путь для скачанных файлов
+  download_path: "./downloads"
+  
+  # Путь для загруженных файлов
+  upload_path: "./uploads"
+
+screenshot:
+  # Включить функционал скриншотов
+  enabled: true
+  
+  # Качество изображения (1-100)
+  quality: 80
+  
+  # Формат изображения (png, jpg)
+  format: "png"
+  
+  # Максимальные размеры скриншота
+  max_width: 1920
+  max_height: 1080
+  
+  # Путь для сохранения скриншотов
+  storage_path: "./screenshots"
+
+events:
+  # Включить уведомления о событиях системы
+  enabled: true
+  
+  # Пользователи, которым отправлять уведомления
+  notify_users: []
+  
+  # Типы событий для отслеживания
+  watch_events: ["login", "logout", "error"]
+  
+  # Интервал проверки событий (в секундах)
+  polling_interval: 30
+
+# Пример настройки:
+# 
+# bot:
+#   token: "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#   debug: false
+# 
+# database:
+#   path: "cupbot.db"
+# 
+# users:
+#   admin_user_ids: [123456789]      # Ваш Telegram ID
+#   allowed_users: [987654321]       # Дополнительные пользователи
+#
+# file_manager:
+#   allowed_drives: ["C:", "D:", "E:"]
+#   allowed_actions: ["list", "download", "upload"]
+#
+# screenshot:
+#   enabled: true
+#   quality: 90
+#
+# events:
+#   enabled: true
+#   notify_users: [123456789]
+#   watch_events: ["login", "logout", "startup", "shutdown", "error"]

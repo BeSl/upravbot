@@ -1,0 +1,34 @@
+# github.com/cupbot/cupbot/internal/database [github.com/cupbot/cupbot/internal/database.test]
+internal\database\database_test.go:564:2: dbPath declared and not used
+internal\database\database_test.go:564:12: multiple-value db.conn.Exec("PRAGMA database_list") (value of type (sql.Result, error)) in single-value context
+FAIL	github.com/cupbot/cupbot/internal/auth [build failed]
+PASS
+ok  	github.com/cupbot/cupbot/internal/bot	1.478s
+--- FAIL: TestLoad (0.03s)
+    --- FAIL: TestLoad/Config_with_environment_override (0.03s)
+        config_test.go:166: Config mismatch.
+            Expected: &{Bot:{Token:env_override_token Debug:false} Database:{Path:env_override.db} Users:{AdminUserIDs:[] AllowedUsers:[]}}
+            Got: &{Bot:{Token:env_override_token Debug:false} Database:{Path:env_override.db} Users:{AdminUserIDs:[] AllowedUsers:[]}}
+    --- FAIL: TestLoad/Default_config_when_no_file_or_env_vars (0.00s)
+        config_test.go:166: Config mismatch.
+            Expected: &{Bot:{Token: Debug:false} Database:{Path:cupbot.db} Users:{AdminUserIDs:[] AllowedUsers:[]}}
+            Got: &{Bot:{Token: Debug:false} Database:{Path:cupbot.db} Users:{AdminUserIDs:[] AllowedUsers:[]}}
+--- FAIL: TestParseUserIDs (0.00s)
+    --- FAIL: TestParseUserIDs/Empty_string (0.00s)
+        config_test.go:214: parseUserIDs("") = [], want []
+    --- FAIL: TestParseUserIDs/Only_invalid_IDs (0.00s)
+        config_test.go:214: parseUserIDs("invalid,abc,xyz") = [], want []
+FAIL
+exit status 1
+FAIL	github.com/cupbot/cupbot/internal/config	0.906s
+FAIL	github.com/cupbot/cupbot/internal/database [build failed]
+?   	github.com/cupbot/cupbot/internal/service	[no test files]
+goos: windows
+goarch: amd64
+pkg: github.com/cupbot/cupbot/internal/system
+cpu: 12th Gen Intel(R) Core(TM) i5-1235U
+BenchmarkGetSystemInfo-12    	       1	1107591700 ns/op	  310032 B/op	     454 allocs/op
+BenchmarkFormatBytes-12      	 1510863	       800.3 ns/op	      72 B/op	       9 allocs/op
+PASS
+ok  	github.com/cupbot/cupbot/internal/system	5.219s
+FAIL
