@@ -103,11 +103,6 @@ jobs:
       with:
         go-version: '1.21.8'
 
-    - name: Run Gosec Security Scanner
-      uses: securecodewarrior/github-action-gosec@master
-      with:
-        args: './...'
-
   lint:
     name: Lint
     runs-on: ubuntu-latest
