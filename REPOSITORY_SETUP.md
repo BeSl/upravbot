@@ -110,6 +110,54 @@ ADMIN_USER_IDS: "123456789"       # Test admin ID
 - **Dependabot**: Enable in **Settings** → **Security & analysis**
 - **CodeQL**: Enable in **Settings** → **Security & analysis**
 
+## 🔄 CI/CD Workflows
+
+The repository includes multiple CI/CD workflows for different scenarios:
+
+### 1. Main CI/CD Pipeline (`ci.yml`)
+- **Trigger**: Push to `main`/`develop`, Pull Requests
+- **Features**: Full testing, linting, building, and release
+- **Release Condition**: Only on successful build
+
+### 2. Tolerant CI (`tolerant-ci.yml`)
+- **Trigger**: Push to `main`/`develop`, Pull Requests  
+- **Features**: Non-blocking tests and linting
+- **Auto-Release**: Creates pre-releases automatically from `main`
+
+### 3. Manual Release (`manual-release.yml`)
+- **Trigger**: Manual workflow dispatch
+- **Features**: Create releases on-demand with custom version
+- **Use Case**: When you need to release despite test failures
+
+### 4. Force Release (`force-release.yml`)
+- **Trigger**: Git tags (`v*`)
+- **Features**: Always creates release from tags
+- **Use Case**: Emergency releases or bypassing CI failures
+
+### Creating Releases
+
+#### Method 1: Automatic (from main branch)
+```bash
+git push origin main  # Triggers auto pre-release
+```
+
+#### Method 2: Manual Release
+1. Go to GitHub Actions
+2. Select "Manual Release" workflow
+3. Click "Run workflow"
+4. Enter version (e.g., `v1.2.3`) and options
+
+#### Method 3: Tag-based Release
+```bash
+git tag v1.2.3
+git push origin v1.2.3  # Triggers force release
+```
+
+#### Method 4: Local Build
+```bash
+.\build-release.bat  # Creates local binaries
+```
+
 ## 🏷️ Release Management
 
 ### Semantic Versioning

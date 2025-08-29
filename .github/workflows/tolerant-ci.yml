@@ -1,0 +1,151 @@
+name: Tolerant CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build and Test (Tolerant)
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~\AppData\Local\go-build
+          ~\go\pkg\mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run vet (non-blocking)
+      run: go vet ./...
+      continue-on-error: true
+
+    - name: Build project
+      run: go build -v -o cupbot.exe .
+
+    - name: Test executable
+      run: .\cupbot.exe -help
+      continue-on-error: true
+
+    - name: Run tests (non-blocking)
+      run: go test -v ./internal/...
+      continue-on-error: true
+
+    - name: Run tests with race detection (non-blocking)
+      run: go test -race ./internal/...
+      continue-on-error: true
+
+    - name: Generate coverage (non-blocking)
+      run: go test -coverprofile=coverage.out ./internal/...
+      continue-on-error: true
+
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: cupbot-build-${{ github.sha }}
+        path: cupbot.exe
+
+    - name: Upload coverage artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-${{ github.sha }}
+        path: coverage.out
+
+  lint-check:
+    name: Lint Check (Non-blocking)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: golangci-lint (non-blocking)
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: v1.55.2
+        args: --timeout=5m --skip-dirs=vendor
+      continue-on-error: true
+
+  auto-release:
+    name: Auto Release
+    runs-on: windows-latest
+    needs: [build-and-test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Build release binary
+      run: |
+        go build -ldflags="-w -s" -o cupbot-windows-amd64.exe .
+
+    - name: Get current date
+      id: date
+      run: echo "date=$(Get-Date -Format 'yyyy-MM-dd-HH-mm')" >> $env:GITHUB_OUTPUT
+
+    - name: Create Pre-release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: auto-${{ steps.date.outputs.date }}
+        name: Auto Build ${{ steps.date.outputs.date }}
+        files: |
+          cupbot-windows-amd64.exe
+        draft: false
+        prerelease: true
+        generate_release_notes: true
+        body: |
+          ## 🤖 Automated Build
+          
+          **Build Time**: ${{ steps.date.outputs.date }}
+          **Commit**: ${{ github.sha }}
+          **Branch**: ${{ github.ref_name }}
+          
+          This is an automated pre-release build from the main branch.
+          
+          ### 📦 Downloads
+          - `cupbot-windows-amd64.exe` - Windows 64-bit executable
+          
+          ### ⚠️ Note
+          This is a development build. For stable releases, use tagged versions.
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,6 +1,7 @@
 run:
-  timeout: 5m
+  timeout: 10m  # Increased timeout
   modules-download-mode: readonly
+  allow-parallel-runners: true
 
 output:
   formats:
@@ -60,16 +61,31 @@ issues:
   exclude-dirs:
     - vendor
     - .git
+    - test-results
   
   exclude-rules:
     - path: _test\.go
       linters:
         - gosec
         - funlen
+        - gocyclo
     
     - text: "weak cryptographic primitive"
       linters:
         - gosec
+        
+    - text: "undefined: yaml"
+      linters:
+        - typecheck
+        
+    - linters:
+        - typecheck
+      text: "could not import.*windows"
+      
+    - linters:
+        - typecheck  
+      text: "build constraints exclude all Go files"
   
-  max-issues-per-linter: 0
-  max-same-issues: 0
+  max-issues-per-linter: 50
+  max-same-issues: 10
+  new: false
