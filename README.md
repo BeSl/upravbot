@@ -1,8 +1,31 @@
 # CupBot - Advanced Telegram Bot for Windows Computer Management
 
-CupBot is a comprehensive Telegram bot written in Go for remote Windows computer management. It features Windows service integration, user management, command history, file management, screenshot capabilities, system event notifications, and an intuitive button-based interface.
+CupBot is a comprehensive Telegram bot written in Go for remote Windows computer management. It features Windows service integration, user management, command history, file management, screenshot capabilities, system event notifications, power management, and an intuitive button-based admin interface.
 
 ## 🚀 **New Features**
+
+### 🔌 **Power Management** (NEW!)
+- ✅ **Remote Shutdown/Reboot** - control system power remotely
+- ✅ **Scheduled Operations** - delay shutdown/reboot with configurable timeouts
+- ✅ **Force Operations** - emergency power operations for unresponsive systems
+- ✅ **Operation Cancellation** - cancel scheduled power operations
+- ✅ **Power Status Monitoring** - view current scheduled operations
+- ✅ **Admin-Only Access** - power operations restricted to administrators
+- ✅ **Confirmation System** - safety confirmations for destructive operations
+
+### 🎛️ **Enhanced Admin Menu System** (NEW!)
+- ✅ **Comprehensive Admin Panel** - centralized control interface
+- ✅ **Power Management Menu** - intuitive power control buttons
+- ✅ **User Management Interface** - button-based user administration
+- ✅ **Enhanced File Manager** - admin-specific file operations
+- ✅ **System Tools Menu** - advanced monitoring and management
+- ✅ **Service Context Detection** - smart feature availability based on runtime mode
+
+### 📸 **Smart Screenshot Service** (ENHANCED!)
+- ✅ **Service Mode Detection** - automatically detects Windows Service context
+- ✅ **Interactive Mode Support** - full functionality when run interactively
+- ✅ **Context-Aware Messages** - clear guidance on service limitations
+- ✅ **Alternative Operation Suggestions** - helps users switch to interactive mode
 
 ### 🔧 **Windows Service Integration**
 - ✅ **Run as Windows Service** - automatic startup and background operation
@@ -102,18 +125,72 @@ cupbot.exe
 
 ## 📋 **Usage**
 
-### 📱 **Button Interface**
-CupBot now features an intuitive button-based interface! No more typing commands - just tap buttons:
+### 📱 **Enhanced Button Interface**
+CupBot features an advanced button-based interface with admin-specific capabilities:
 
+#### **Regular User Interface**
 - 💻 **System Status** - View complete system information
 - ⏰ **Uptime** - Check system uptime
 - 📝 **Command History** - View your recent commands
 - 📁 **File Manager** - Browse files and directories
 - 📸 **Screenshot** - Take desktop screenshots
 - 🔔 **Events** - System event monitoring status
-- 👥 **Users** (Admin) - Manage users
-- 📊 **Statistics** (Admin) - View usage statistics
 - 📜 **Menu** - Quick access menu button after each response
+
+#### **Admin Interface** 🔑
+- 🔌 **Power Management** - Control system shutdown/reboot
+  - 🔴 Immediate shutdown/reboot
+  - ⏱️ Scheduled operations (1min, 5min, 10min, 30min)
+  - ⚠️ Force operations for emergency situations
+  - ❌ Cancel active operations
+  - ℹ️ View power operation status
+
+- 👥 **User Management** - Complete user administration
+  - 👥 List all users with status
+  - ➕ Add new administrators
+  - ➖ Remove administrator privileges
+  - 🚫 Ban/unban users
+  - 🗑️ Delete users (with warnings)
+  - 📊 View user statistics
+
+- 📁 **Enhanced File Manager** - Advanced file operations
+  - 📂 Browse all accessible drives
+  - 📄 Upload and download files
+  - 🔍 View file details and permissions
+  - 🚪 Safe access controls
+
+- 📸 **Smart Screenshot Service**
+  - ✅ Full desktop capture (interactive mode)
+  - ⚠️ Service mode detection with helpful guidance
+  - 🔧 Alternative operation instructions
+
+- 🔧 **System Tools** - Advanced monitoring
+  - 💻 Enhanced system status
+  - 📝 Detailed command history
+  - 🔔 System event monitoring
+  - 📊 Performance statistics
+
+### 🔒 **Power Management Features**
+
+#### **Available Power Operations**
+- **Immediate Shutdown** - Graceful system shutdown
+- **Immediate Reboot** - Graceful system restart
+- **Scheduled Shutdown/Reboot** - Delayed operations with multiple timeout options
+- **Force Operations** - Emergency power operations (use with caution)
+- **Operation Cancellation** - Cancel any scheduled power operation
+
+#### **Safety Features**
+- 🔒 **Admin-Only Access** - Power operations restricted to administrators
+- ⚠️ **Confirmation Dialogs** - Clear warnings for destructive operations
+- 📝 **Operation Logging** - All power operations logged for audit trail
+- ⏰ **Status Monitoring** - Real-time view of scheduled operations
+- ❌ **Cancellation Support** - Ability to cancel operations before execution
+
+#### **Windows API Integration**
+- **Native Windows Power Management** - Uses Windows API for reliable operations
+- **Privilege Management** - Automatic elevation of shutdown privileges
+- **Service Compatibility** - Works in both interactive and service modes
+- **Cross-Platform Stubs** - Graceful handling on non-Windows platforms
 
 ### Admin User Management
 Administrators can manage users through button interface or commands:
@@ -196,6 +273,46 @@ events:
   # Уведомлять пользователей
   notify_users: [ваш_telegram_id]
 ```
+
+## 🔌 **Power Management Configuration**
+
+Power management features are enabled by default for administrators. No additional configuration is required, but consider these security implications:
+
+### **Safety Considerations**
+- ⚠️ **Admin-Only Access**: Power operations are restricted to users with admin privileges
+- 🔒 **Confirmation Required**: Immediate operations require explicit confirmation
+- 📝 **Audit Logging**: All power operations are logged with user ID and timestamps
+- ❌ **Cancellation Support**: Scheduled operations can be canceled before execution
+- ⏱️ **Minimum Delays**: Consider implementing minimum delay requirements for scheduled operations
+
+### **Service vs Interactive Mode**
+- **Windows Service Mode**: Power management works in service mode with full functionality
+- **Interactive Mode**: All features available, including screenshots
+- **Context Detection**: The bot automatically detects its runtime context
+
+### **Platform Support**
+- **Windows**: Full power management support via Windows API
+- **Non-Windows**: Graceful degradation with informative error messages
+
+## 📸 **Screenshot Service Notes**
+
+### **Service Context Limitations**
+When running as a Windows Service, screenshot functionality is automatically disabled because:
+- Services run in Session 0 (non-interactive desktop)
+- No access to user desktop for screen capture
+- Windows security model prevents desktop access from services
+
+### **Solutions for Screenshot Access**
+1. **Run Interactively**: Start CupBot from command line instead of as a service
+2. **Dual Setup**: Run main bot as service, separate screenshot instance interactively
+3. **User Session Service**: Configure service to run in user session (advanced)
+
+### **Automatic Detection and Guidance**
+The bot automatically:
+- Detects when running as a Windows Service
+- Provides clear error messages explaining limitations
+- Suggests alternative approaches (switching to interactive mode)
+- Shows step-by-step instructions for enabling screenshots
 
 ### 5. Получение вашего Telegram ID
 1. Напишите [@userinfobot](https://t.me/userinfobot)
@@ -338,13 +455,16 @@ cupbot/
 ## Развитие проекта
 
 ### Планируемые возможности
+- ✅ Управление питанием (выключение/перезагрузка) - **COMPLETED**
+- ✅ Удаленное выключение/перезагрузка - **COMPLETED** 
+- ✅ Скриншоты рабочего стола - **COMPLETED**
+- ✅ Уведомления о событиях системы - **COMPLETED**
+- ✅ Управление файлами (просмотр, скачивание) - **COMPLETED**
+- ✅ Интерфейс с кнопками - **COMPLETED**
+- ✅ Меню администратора - **COMPLETED**
 - 🔲 Управление процессами (список, завершение)
 - 🔲 Управление службами Windows
 - 🔲 Выполнение произвольных команд CMD/PowerShell
-- 🔲 Управление файлами (просмотр, скачивание)
-- 🔲 Удаленное выключение/перезагрузка
-- 🔲 Скриншоты рабочего стола
-- 🔲 Уведомления о событиях системы
 - 🔲 Web интерфейс для управления
 
 ### Как добавить новую команду

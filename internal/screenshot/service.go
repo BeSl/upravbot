@@ -19,6 +19,7 @@ import (
 var (
 	user32                     = syscall.NewLazyDLL("user32.dll")
 	gdi32                      = syscall.NewLazyDLL("gdi32.dll")
+	kernel32                   = syscall.NewLazyDLL("kernel32.dll")
 	procGetSystemMetrics       = user32.NewProc("GetSystemMetrics")
 	procGetDC                  = user32.NewProc("GetDC")
 	procCreateCompatibleDC     = gdi32.NewProc("CreateCompatibleDC")
@@ -29,6 +30,8 @@ var (
 	procDeleteObject           = gdi32.NewProc("DeleteObject")
 	procDeleteDC               = gdi32.NewProc("DeleteDC")
 	procReleaseDC              = user32.NewProc("ReleaseDC")
+	procGetCurrentProcessId    = kernel32.NewProc("GetCurrentProcessId")
+	procProcessIdToSessionId   = kernel32.NewProc("ProcessIdToSessionId")
 )
 
 const (
@@ -70,11 +73,20 @@ func (s *Service) TakeScreenshot() (string, error) {
 		return "", fmt.Errorf("screenshot functionality is disabled")
 	}
 
+	// Check if running as Windows Service (Session 0)
+	if s.isRunningAsService() {
+		return "", fmt.Errorf("screenshots are not available when running as Windows Service - run in interactive mode instead")
+	}
+
 	// Get screen dimensions
 	width, _, _ := procGetSystemMetrics.Call(SM_CXSCREEN)
 	height, _, _ := procGetSystemMetrics.Call(SM_CYSCREEN)
 	screenWidth := int(width)
 	screenHeight := int(height)
+
+	if screenWidth == 0 || screenHeight == 0 {
+		return "", fmt.Errorf("no desktop session available - ensure running in interactive mode")
+	}
 
 	// Apply size limits from configuration
 	if s.config.Screenshot.MaxWidth > 0 && screenWidth > s.config.Screenshot.MaxWidth {
@@ -274,4 +286,17 @@ type ScreenshotInfo struct {
 	Path    string    `json:"path"`
 	Size    int64     `json:"size"`
 	ModTime time.Time `json:"mod_time"`
+}
+
+// isRunningAsService checks if the process is running as a Windows Service (Session 0)
+func (s *Service) isRunningAsService() bool {
+	// Get current process ID
+	pid, _, _ := procGetCurrentProcessId.Call()
+	
+	// Get session ID for current process
+	var sessionId uint32
+	ret, _, _ := procProcessIdToSessionId.Call(pid, uintptr(unsafe.Pointer(&sessionId)))
+	
+	// If the call failed or session ID is 0, we're likely running as a service
+	return ret == 0 || sessionId == 0
 }

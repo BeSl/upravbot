@@ -204,6 +204,56 @@ func (s *Service) DeleteFile(path string) error {
 	return os.Remove(cleanPath)
 }
 
+// GetParentDirectory returns the parent directory path
+func (s *Service) GetParentDirectory(path string) string {
+	cleanPath := filepath.Clean(path)
+	parent := filepath.Dir(cleanPath)
+	
+	// Don't go above drive root
+	if len(parent) <= 3 && strings.Contains(parent, ":") {
+		return parent
+	}
+	
+	return parent
+}
+
+// GetDirectoryBreadcrumb creates a breadcrumb navigation for the path
+func (s *Service) GetDirectoryBreadcrumb(path string) []string {
+	cleanPath := filepath.Clean(path)
+	parts := strings.Split(cleanPath, string(filepath.Separator))
+	
+	var breadcrumb []string
+	currentPath := ""
+	
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		
+		if i == 0 && strings.Contains(part, ":") {
+			// Drive letter
+			currentPath = part + "\\"
+		} else {
+			currentPath = filepath.Join(currentPath, part)
+		}
+		
+		breadcrumb = append(breadcrumb, currentPath)
+	}
+	
+	return breadcrumb
+}
+
+// IsValidPath checks if a path is valid and accessible
+func (s *Service) IsValidPath(path string) bool {
+	if !s.isDriveAllowed(path) {
+		return false
+	}
+	
+	cleanPath := filepath.Clean(path)
+	_, err := os.Stat(cleanPath)
+	return err == nil
+}
+
 // GetAvailableDrives returns list of available drives based on configuration
 func (s *Service) GetAvailableDrives() []string {
 	var availableDrives []string

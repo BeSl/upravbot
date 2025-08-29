@@ -11,6 +11,7 @@ import (
 	"github.com/cupbot/cupbot/internal/database"
 	"github.com/cupbot/cupbot/internal/events"
 	"github.com/cupbot/cupbot/internal/filemanager"
+	"github.com/cupbot/cupbot/internal/power"
 	"github.com/cupbot/cupbot/internal/screenshot"
 	"github.com/cupbot/cupbot/internal/system"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -26,6 +27,7 @@ type Bot struct {
 	fileManager       *filemanager.Service
 	screenshotService *screenshot.Service
 	eventsService     *events.Service
+	powerService      *power.Service
 }
 
 // New создает новый экземпляр бота
@@ -46,6 +48,7 @@ func New(cfg *config.Config, db *database.DB) (*Bot, error) {
 		fileManager:       filemanager.NewService(cfg),
 		screenshotService: screenshot.NewService(cfg),
 		eventsService:     events.NewService(cfg),
+		powerService:      power.NewService(cfg),
 	}
 
 	log.Printf("Authorized on account %s", api.Self.UserName)
@@ -180,29 +183,89 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery, user *databa
 	var success bool
 
 	// Обрабатываем каллбэк данные
-	switch callback.Data {
-	case "status":
+	switch {
+	// Basic commands
+	case callback.Data == "status":
 		response, success = b.handleStatusCallback(user)
-	case "uptime":
+	case callback.Data == "uptime":
 		response, success = b.handleUptimeCallback(user)
-	case "history":
+	case callback.Data == "history":
 		response, success = b.handleHistoryCallback(user)
-	case "users":
+	case callback.Data == "users":
 		response, success = b.handleUsersCallback(user)
-	case "stats":
+	case callback.Data == "stats":
 		response, success = b.handleStatsCallback(user)
-	case "admin_menu":
-		response, success = b.handleAdminMenuCallback(user)
-	case "main_menu":
-		response, success = b.handleMainMenuCallback(user)
-	case "files":
+	case callback.Data == "files":
 		response, success = b.handleFilesCallback(user)
-	case "screenshot":
+	case callback.Data == "screenshot":
 		response, success = b.handleScreenshotCallback(user)
-	case "events":
+	case callback.Data == "events":
 		response, success = b.handleEventsCallback(user)
-	case "menu":
+
+	// Menu navigation
+	case callback.Data == "admin_menu":
+		response, success = b.handleAdminMenuCallback(user)
+	case callback.Data == "main_menu":
+		response, success = b.handleMainMenuCallback(user)
+	case callback.Data == "menu":
 		response, success = b.handleMenuCallback(user)
+
+	// Power management
+	case callback.Data == "power_menu":
+		response, success = b.handlePowerMenuCallback(user)
+	case callback.Data == "shutdown_now":
+		response, success = b.handleShutdownNowCallback(user)
+	case callback.Data == "shutdown_1min":
+		response, success = b.handleShutdownDelayCallback(user, 1*time.Minute, false)
+	case callback.Data == "shutdown_5min":
+		response, success = b.handleShutdownDelayCallback(user, 5*time.Minute, false)
+	case callback.Data == "shutdown_10min":
+		response, success = b.handleShutdownDelayCallback(user, 10*time.Minute, false)
+	case callback.Data == "shutdown_30min":
+		response, success = b.handleShutdownDelayCallback(user, 30*time.Minute, false)
+	case callback.Data == "reboot_now":
+		response, success = b.handleRebootNowCallback(user)
+	case callback.Data == "reboot_1min":
+		response, success = b.handleRebootDelayCallback(user, 1*time.Minute, false)
+	case callback.Data == "reboot_5min":
+		response, success = b.handleRebootDelayCallback(user, 5*time.Minute, false)
+	case callback.Data == "reboot_10min":
+		response, success = b.handleRebootDelayCallback(user, 10*time.Minute, false)
+	case callback.Data == "reboot_30min":
+		response, success = b.handleRebootDelayCallback(user, 30*time.Minute, false)
+	case callback.Data == "force_shutdown":
+		response, success = b.handleShutdownDelayCallback(user, 0, true)
+	case callback.Data == "force_reboot":
+		response, success = b.handleRebootDelayCallback(user, 0, true)
+	case callback.Data == "cancel_power":
+		response, success = b.handleCancelPowerCallback(user)
+	case callback.Data == "power_status":
+		response, success = b.handlePowerStatusCallback(user)
+
+	// User management
+	case callback.Data == "user_menu":
+		response, success = b.handleUserMenuCallback(user)
+	case callback.Data == "add_admin_menu":
+		response, success = b.handleAddAdminMenuCallback(user)
+	case callback.Data == "remove_admin_menu":
+		response, success = b.handleRemoveAdminMenuCallback(user)
+	case callback.Data == "ban_user_menu":
+		response, success = b.handleBanUserMenuCallback(user)
+	case callback.Data == "unban_user_menu":
+		response, success = b.handleUnbanUserMenuCallback(user)
+	case callback.Data == "delete_user_menu":
+		response, success = b.handleDeleteUserMenuCallback(user)
+	case callback.Data == "list_users":
+		response, success = b.handleListUsersCallback(user)
+
+	// Enhanced services
+	case callback.Data == "file_manager_admin":
+		response, success = b.handleFileManagerAdminCallback(user)
+	case callback.Data == "screenshot_admin":
+		response, success = b.handleScreenshotAdminCallback(user)
+	case callback.Data == "system_tools":
+		response, success = b.handleSystemToolsCallback(user)
+
 	default:
 		response = "Неизвестная команда"
 		success = false
@@ -214,15 +277,24 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery, user *databa
 		msg.ParseMode = tgbotapi.ModeMarkdown
 
 		// Добавляем кнопку меню после каждого callback ответа
-		if callback.Data != "main_menu" && callback.Data != "admin_menu" && callback.Data != "menu" {
+		if !isMenuCallback(callback.Data) && !isPowerCallback(callback.Data) && !isUserManagementCallback(callback.Data) {
 			msg.ReplyMarkup = b.getMenuKeyboard()
 		}
 
 		// Для меню показываем соответствующую клавиатуру
-		if callback.Data == "main_menu" || callback.Data == "menu" {
+		switch callback.Data {
+		case "main_menu", "menu":
 			msg.ReplyMarkup = b.getMainKeyboard(user.IsAdmin)
-		} else if callback.Data == "admin_menu" {
+		case "admin_menu":
 			msg.ReplyMarkup = b.getAdminKeyboard()
+		case "power_menu":
+			msg.ReplyMarkup = b.getPowerMenuKeyboard()
+		case "user_menu":
+			msg.ReplyMarkup = b.getUserManagementKeyboard()
+		case "file_manager_admin":
+			msg.ReplyMarkup = b.getFileManagerKeyboard()
+		case "system_tools":
+			msg.ReplyMarkup = b.getSystemToolsKeyboard()
 		}
 
 		if _, err := b.api.Send(msg); err != nil {
@@ -701,6 +773,9 @@ func (b *Bot) getMainKeyboard(isAdmin bool) tgbotapi.InlineKeyboardMarkup {
 			tgbotapi.NewInlineKeyboardButtonData("👥 Users", "users"),
 			tgbotapi.NewInlineKeyboardButtonData("📊 Statistics", "stats"),
 		})
+		rows = append(rows, []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData("🔑 Admin Menu", "admin_menu"),
+		})
 	}
 
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
@@ -759,8 +834,16 @@ func (b *Bot) handleStatsInternal(user *database.User) (string, bool) {
 func (b *Bot) getAdminKeyboard() tgbotapi.InlineKeyboardMarkup {
 	rows := [][]tgbotapi.InlineKeyboardButton{
 		{
-			tgbotapi.NewInlineKeyboardButtonData("👥 Manage Users", "users"),
-			tgbotapi.NewInlineKeyboardButtonData("📊 View Stats", "stats"),
+			tgbotapi.NewInlineKeyboardButtonData("🔌 Power Management", "power_menu"),
+			tgbotapi.NewInlineKeyboardButtonData("👥 User Management", "user_menu"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("📁 File Manager+", "file_manager_admin"),
+			tgbotapi.NewInlineKeyboardButtonData("📸 Screenshot+", "screenshot_admin"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("💻 System Monitoring", "status"),
+			tgbotapi.NewInlineKeyboardButtonData("🔧 System Tools", "system_tools"),
 		},
 		{
 			tgbotapi.NewInlineKeyboardButtonData("🏠 Main Menu", "main_menu"),
@@ -870,4 +953,367 @@ func (b *Bot) handleEventsCallback(user *database.User) (string, bool) {
 
 func (b *Bot) handleMenuCallback(user *database.User) (string, bool) {
 	return fmt.Sprintf("📜 *Menu*\n\nHello, %s! Choose an action:", user.FirstName), true
+}
+
+// Helper functions for callback type checking
+func isMenuCallback(data string) bool {
+	menuCallbacks := []string{"main_menu", "admin_menu", "menu", "power_menu", "user_menu", "file_manager_admin", "system_tools"}
+	for _, callback := range menuCallbacks {
+		if data == callback {
+			return true
+		}
+	}
+	return false
+}
+
+func isPowerCallback(data string) bool {
+	powerCallbacks := []string{"power_menu", "shutdown_now", "shutdown_1min", "shutdown_5min", "shutdown_10min", "shutdown_30min",
+		"reboot_now", "reboot_1min", "reboot_5min", "reboot_10min", "reboot_30min", "force_shutdown", "force_reboot", "cancel_power", "power_status"}
+	for _, callback := range powerCallbacks {
+		if data == callback {
+			return true
+		}
+	}
+	return false
+}
+
+func isUserManagementCallback(data string) bool {
+	userCallbacks := []string{"user_menu", "add_admin_menu", "remove_admin_menu", "ban_user_menu", "unban_user_menu", "delete_user_menu", "list_users"}
+	for _, callback := range userCallbacks {
+		if data == callback {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *Bot) getPowerMenuKeyboard() tgbotapi.InlineKeyboardMarkup {
+	rows := [][]tgbotapi.InlineKeyboardButton{
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🔴 Shutdown Now", "shutdown_now"),
+			tgbotapi.NewInlineKeyboardButtonData("🔄 Reboot Now", "reboot_now"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("⏱️ Shutdown in 1min", "shutdown_1min"),
+			tgbotapi.NewInlineKeyboardButtonData("⏱️ Reboot in 1min", "reboot_1min"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("⏰ Shutdown in 5min", "shutdown_5min"),
+			tgbotapi.NewInlineKeyboardButtonData("⏰ Reboot in 5min", "reboot_5min"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🕒 Shutdown in 10min", "shutdown_10min"),
+			tgbotapi.NewInlineKeyboardButtonData("🕒 Reboot in 10min", "reboot_10min"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🕥 Shutdown in 30min", "shutdown_30min"),
+			tgbotapi.NewInlineKeyboardButtonData("🕥 Reboot in 30min", "reboot_30min"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("⚠️ Force Shutdown", "force_shutdown"),
+			tgbotapi.NewInlineKeyboardButtonData("⚠️ Force Reboot", "force_reboot"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("❌ Cancel Operation", "cancel_power"),
+			tgbotapi.NewInlineKeyboardButtonData("ℹ️ Power Status", "power_status"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+		},
+	}
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func (b *Bot) getUserManagementKeyboard() tgbotapi.InlineKeyboardMarkup {
+	rows := [][]tgbotapi.InlineKeyboardButton{
+		{
+			tgbotapi.NewInlineKeyboardButtonData("👥 List All Users", "list_users"),
+			tgbotapi.NewInlineKeyboardButtonData("📊 User Statistics", "stats"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("➕ Add Administrator", "add_admin_menu"),
+			tgbotapi.NewInlineKeyboardButtonData("➖ Remove Administrator", "remove_admin_menu"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🚫 Ban User", "ban_user_menu"),
+			tgbotapi.NewInlineKeyboardButtonData("✅ Unban User", "unban_user_menu"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🗑️ Delete User", "delete_user_menu"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+		},
+	}
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func (b *Bot) getFileManagerKeyboard() tgbotapi.InlineKeyboardMarkup {
+	rows := [][]tgbotapi.InlineKeyboardButton{
+		{
+			tgbotapi.NewInlineKeyboardButtonData("📁 Browse Files", "files"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+		},
+	}
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+func (b *Bot) getSystemToolsKeyboard() tgbotapi.InlineKeyboardMarkup {
+	rows := [][]tgbotapi.InlineKeyboardButton{
+		{
+			tgbotapi.NewInlineKeyboardButtonData("💻 System Status", "status"),
+			tgbotapi.NewInlineKeyboardButtonData("⏰ Uptime", "uptime"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("📝 Command History", "history"),
+			tgbotapi.NewInlineKeyboardButtonData("🔔 System Events", "events"),
+		},
+		{
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
+		},
+	}
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+// Power Management Callback Handlers
+func (b *Bot) handlePowerMenuCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	// Check current power status
+	response := "🔌 *Power Management*\n\n"
+
+	if op := b.powerService.GetScheduledOperation(); op != nil {
+		timeLeft := time.Until(op.ScheduledAt)
+		response += fmt.Sprintf("⚠️ *Active Operation:* %s\n", op.Type)
+		response += fmt.Sprintf("⏰ *Time Remaining:* %v\n\n", timeLeft.Round(time.Second))
+	}
+
+	response += "Choose a power operation:"
+	return response, true
+}
+
+func (b *Bot) handleShutdownNowCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	err := b.powerService.ScheduleShutdown(user.ID, 0, false)
+	if err != nil {
+		return fmt.Sprintf("❌ Error initiating shutdown: %v", err), false
+	}
+
+	return "🔴 *Immediate shutdown initiated*\n\nThe system will shut down now.", true
+}
+
+func (b *Bot) handleRebootNowCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	err := b.powerService.ScheduleReboot(user.ID, 0, false)
+	if err != nil {
+		return fmt.Sprintf("❌ Error initiating reboot: %v", err), false
+	}
+
+	return "🔄 *Immediate reboot initiated*\n\nThe system will restart now.", true
+}
+
+func (b *Bot) handleShutdownDelayCallback(user *database.User, delay time.Duration, force bool) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	err := b.powerService.ScheduleShutdown(user.ID, delay, force)
+	if err != nil {
+		return fmt.Sprintf("❌ Error scheduling shutdown: %v", err), false
+	}
+
+	if delay == 0 {
+		if force {
+			return "⚠️ *Force shutdown initiated*\n\nThe system will shut down immediately, closing all applications.", true
+		}
+		return "🔴 *Immediate shutdown initiated*\n\nThe system will shut down now.", true
+	}
+
+	actionType := "Shutdown"
+	if force {
+		actionType = "Force shutdown"
+	}
+
+	return fmt.Sprintf("⏰ *%s scheduled*\n\nThe system will shut down in %v.", actionType, delay), true
+}
+
+func (b *Bot) handleRebootDelayCallback(user *database.User, delay time.Duration, force bool) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	err := b.powerService.ScheduleReboot(user.ID, delay, force)
+	if err != nil {
+		return fmt.Sprintf("❌ Error scheduling reboot: %v", err), false
+	}
+
+	if delay == 0 {
+		if force {
+			return "⚠️ *Force reboot initiated*\n\nThe system will restart immediately, closing all applications.", true
+		}
+		return "🔄 *Immediate reboot initiated*\n\nThe system will restart now.", true
+	}
+
+	actionType := "Reboot"
+	if force {
+		actionType = "Force reboot"
+	}
+
+	return fmt.Sprintf("⏰ *%s scheduled*\n\nThe system will restart in %v.", actionType, delay), true
+}
+
+func (b *Bot) handleCancelPowerCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	err := b.powerService.CancelScheduledOperation()
+	if err != nil {
+		return fmt.Sprintf("❌ Error canceling operation: %v", err), false
+	}
+
+	return "✅ *Power operation canceled*\n\nAny scheduled shutdown or reboot has been canceled.", true
+}
+
+func (b *Bot) handlePowerStatusCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	status := b.powerService.GetPowerStatus()
+	response := "ℹ️ *Power Management Status*\n\n"
+
+	if op := b.powerService.GetScheduledOperation(); op != nil {
+		timeLeft := time.Until(op.ScheduledAt)
+		response += fmt.Sprintf("⚠️ *Active Operation:* %s\n", op.Type)
+		response += fmt.Sprintf("👤 *Initiated by:* User %d\n", op.UserID)
+		response += fmt.Sprintf("⏰ *Scheduled for:* %s\n", op.ScheduledAt.Format("15:04:05"))
+		response += fmt.Sprintf("⏱️ *Time remaining:* %v\n", timeLeft.Round(time.Second))
+	} else {
+		response += "✅ No active power operations\n"
+	}
+
+	// Add platform-specific information
+	if supported, exists := status["supported"]; exists && !supported.(bool) {
+		response += "\n⚠️ Platform: Non-Windows (limited support)"
+	} else {
+		response += "\n🟢 Platform: Windows (full support)"
+	}
+
+	return response, true
+}
+
+// User Management Callback Handlers
+func (b *Bot) handleUserMenuCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "👥 *User Management*\n\nSelect a user management action:", true
+}
+
+func (b *Bot) handleAddAdminMenuCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "➕ *Add Administrator*\n\nTo promote a user to administrator, use the command:\n`/addadmin [User_ID]`\n\nExample: `/addadmin 123456789`", true
+}
+
+func (b *Bot) handleRemoveAdminMenuCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "➖ *Remove Administrator*\n\nTo remove admin privileges from a user, use the command:\n`/removeadmin [User_ID]`\n\nExample: `/removeadmin 123456789`", true
+}
+
+func (b *Bot) handleBanUserMenuCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "🚫 *Ban User*\n\nTo ban a user from using the bot, use the command:\n`/banuser [User_ID]`\n\nExample: `/banuser 123456789`", true
+}
+
+func (b *Bot) handleUnbanUserMenuCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "✅ *Unban User*\n\nTo unban a user and restore access, use the command:\n`/unbanuser [User_ID]`\n\nExample: `/unbanuser 123456789`", true
+}
+
+func (b *Bot) handleDeleteUserMenuCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "🗑️ *Delete User*\n\nTo permanently delete a user from the database, use the command:\n`/deleteuser [User_ID]`\n\nExample: `/deleteuser 123456789`\n\n⚠️ *Warning:* This action cannot be undone!", true
+}
+
+func (b *Bot) handleListUsersCallback(user *database.User) (string, bool) {
+	return b.handleUsersInternal(user)
+}
+
+// Enhanced Service Callback Handlers
+func (b *Bot) handleFileManagerAdminCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "📁 *Enhanced File Manager*\n\nAdmin file management features:\n\n• Browse all accessible drives\n• Upload and download files\n• View file details and permissions\n\nUse the buttons below or `/files` command to start browsing.", true
+}
+
+func (b *Bot) handleScreenshotAdminCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	// Check if running as service
+	response := "📸 *Enhanced Screenshot Service*\n\n"
+
+	// Try to take a screenshot to test functionality
+	_, err := b.screenshotService.TakeScreenshot()
+	if err != nil {
+		if strings.Contains(err.Error(), "service") {
+			response += "⚠️ *Service Mode Detected*\n\n"
+			response += "Screenshots are not available when running as a Windows Service.\n\n"
+			response += "📝 *Alternative:* Run CupBot in interactive mode to enable screenshots.\n\n"
+			response += "🔧 *How to run interactively:*\n"
+			response += "1. Stop the Windows service\n"
+			response += "2. Run `cupbot.exe` directly from command line\n"
+			response += "3. Screenshot functionality will be available"
+			return response, false
+		}
+		response += fmt.Sprintf("❌ Error testing screenshot: %v\n\n", err)
+	} else {
+		response += "✅ Screenshot functionality is available\n\n"
+	}
+
+	response += "Admin screenshot features:\n\n"
+	response += "• Capture full desktop\n"
+	response += "• Configurable quality and format\n"
+	response += "• Automatic timestamping\n\n"
+	response += "Use `/screenshot` command to capture the desktop."
+
+	return response, true
+}
+
+func (b *Bot) handleSystemToolsCallback(user *database.User) (string, bool) {
+	if !user.IsAdmin {
+		return "❌ Access denied: Admin privileges required", false
+	}
+
+	return "🔧 *System Tools*\n\nAdvanced system monitoring and management tools.\n\nSelect a tool from the menu below:", true
 }
