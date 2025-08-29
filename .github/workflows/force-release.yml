@@ -1,0 +1,88 @@
+name: Force Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  force-release:
+    name: Force Release
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Build release binary
+      run: |
+        go build -ldflags="-w -s" -o cupbot-windows-amd64.exe .
+
+    - name: Get tag name
+      id: tag
+      run: echo "tag=${GITHUB_REF#refs/tags/}" >> $env:GITHUB_OUTPUT
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: CupBot ${{ steps.tag.outputs.tag }}
+        files: |
+          cupbot-windows-amd64.exe
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: |
+          ## 🚀 CupBot Release ${{ steps.tag.outputs.tag }}
+          
+          ### Features
+          - 🤖 Telegram bot for Windows system management
+          - 📁 File manager with security controls
+          - 📸 Screenshot capture functionality  
+          - ⚡ Power management (shutdown/reboot)
+          - 👥 User administration and role management
+          - 📊 System monitoring and statistics
+          - 🔄 Windows Service integration
+          
+          ### 📦 Installation
+          1. Download `cupbot-windows-amd64.exe`
+          2. Create configuration file (see documentation)
+          3. Run `cupbot.exe -install` to install as Windows service
+          4. Or run directly: `cupbot.exe`
+          
+          ### 🔧 Quick Setup
+          ```bash
+          # Download and run
+          cupbot.exe -help
+          
+          # Install as Windows service (run as Administrator)
+          cupbot.exe -install
+          
+          # Start service
+          sc start CupBot
+          ```
+          
+          ### 📚 Documentation
+          - [Setup Guide](https://github.com/${{ github.repository }}/blob/main/REPOSITORY_SETUP.md)
+          - [User Manual](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [Testing Guide](https://github.com/${{ github.repository }}/blob/main/TESTING.md)
+          
+          ### ⚠️ Requirements
+          - Windows 10/11 or Windows Server 2016+
+          - Telegram Bot Token
+          - Administrator privileges (for some features)
+          
+          **Release created**: ${{ github.event.head_commit.timestamp }}
+          **Commit**: ${{ github.sha }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

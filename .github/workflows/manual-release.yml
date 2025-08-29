@@ -1,0 +1,82 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  manual-release:
+    name: Manual Release
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Download dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run quick tests
+      run: go test ./internal/...
+      continue-on-error: true
+
+    - name: Build release binaries
+      run: |
+        go build -ldflags="-w -s" -o cupbot-windows-amd64.exe .
+        
+    - name: Test executable
+      run: .\cupbot-windows-amd64.exe -help
+      continue-on-error: true
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.event.inputs.version }}
+        name: Release ${{ github.event.inputs.version }}
+        files: |
+          cupbot-windows-amd64.exe
+        draft: false
+        prerelease: ${{ github.event.inputs.prerelease }}
+        generate_release_notes: true
+        body: |
+          ## CupBot Release ${{ github.event.inputs.version }}
+          
+          ### 🚀 Features
+          - Telegram bot for Windows system management
+          - File manager functionality
+          - Screenshot capture
+          - Power management
+          - User administration
+          - System monitoring
+          
+          ### 📦 Installation
+          1. Download `cupbot-windows-amd64.exe`
+          2. Create configuration file
+          3. Run as service or standalone
+          
+          ### 🔧 Configuration
+          See [REPOSITORY_SETUP.md](https://github.com/${{ github.repository }}/blob/main/REPOSITORY_SETUP.md) for detailed setup instructions.
+          
+          **Manual release created on**: ${{ github.event.head_commit.timestamp }}
+          **Commit**: ${{ github.sha }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
