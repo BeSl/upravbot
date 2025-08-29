@@ -275,6 +275,45 @@ issues:
         - gosec
 ```
 
+#### Go Version Compatibility Issues
+```yaml
+# Problem: CI fails with Go version incompatibility
+# Error: golang.org/x/sys@v0.35.0 requires go >= 1.23.0
+# Solution: Update CI configuration and go.mod
+- name: Set up Go
+  uses: actions/setup-go@v4
+  with:
+    go-version: '1.23'  # Use Go 1.23+ for latest dependencies
+```
+
+#### Cross-Platform Compilation Issues
+```go
+// Problem: Windows-specific code fails on Linux CI
+// Error: undefined: syscall.NewLazyDLL
+// Error: could not import golang.org/x/sys/windows/svc
+
+// Solution: Use build constraints
+// File: main.go
+//go:build windows
+
+package main
+// Windows-specific code here
+
+// File: main_stub.go  
+//go:build !windows
+
+package main
+// Cross-platform stub implementation
+```
+
+#### Missing Dependencies Issues
+```bash
+# Problem: missing go.sum entry for module
+# Solution: Update dependencies
+go mod tidy
+go mod verify
+```
+
 #### golangci-lint Version Compatibility Issues
 ```yaml
 # Problem: golangci-lint v2.4.0+ has breaking changes
