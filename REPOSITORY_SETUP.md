@@ -275,6 +275,19 @@ issues:
         - gosec
 ```
 
+#### golangci-lint Version Compatibility Issues
+```yaml
+# Problem: golangci-lint v2.4.0+ has breaking changes
+# Solution 1: Use specific compatible version
+- name: golangci-lint
+  uses: golangci/golangci-lint-action@v6
+  with:
+    version: v1.55.2  # Stable version
+    
+# Solution 2: Simplify .golangci.yml configuration
+# Remove deprecated linters and use only essential ones
+```
+
 ## 📚 Additional Resources
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)

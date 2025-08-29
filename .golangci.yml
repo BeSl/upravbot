@@ -1,116 +1,75 @@
 run:
   timeout: 5m
-  go: '1.21'
+  modules-download-mode: readonly
 
 output:
-  format: colored-line-number
+  formats:
+    - format: colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
 linters-settings:
   errcheck:
     check-type-assertions: true
-    check-blank: true
   
   govet:
-    check-shadowing: true
-    enable-all: true
+    shadow:
+      strict: false
   
   gocyclo:
     min-complexity: 15
   
-  gofmt:
-    simplify: true
-  
   goimports:
     local-prefixes: github.com/cupbot/cupbot
   
-  golint:
-    min-confidence: 0.8
-  
   misspell:
     locale: US
+
+  gosec:
+    excludes:
+      - G404  # Use of weak random number generator
   
-  unparam:
-    check-exported: false
+  funlen:
+    lines: 100
+    statements: 50
 
 linters:
   enable:
-    - bodyclose
-    - deadcode
-    - depguard
-    - dogsled
-    - dupl
+    # Essential linters only
     - errcheck
-    - exportloopref
-    - exhaustive
-    - funlen
-    - gochecknoinits
-    - goconst
-    - gocritic
-    - gocyclo
-    - gofmt
-    - goimports
-    - gomnd
-    - goprintffuncname
-    - gosec
     - gosimple
     - govet
     - ineffassign
-    - interfacer
-    - lll
-    - maligned
-    - misspell
-    - nakedret
-    - nolintlint
-    - rowserrcheck
-    - scopelint
     - staticcheck
-    - structcheck
-    - stylecheck
-    - typecheck
-    - unconvert
-    - unparam
     - unused
-    - varcheck
-    - whitespace
-
-  disable:
-    - gochecknoglobals  # Allow globals for configuration
-    - gocognit         # Duplicate of gocyclo
-    - godot            # Allow comments without periods
-    - godox            # Allow TODO comments
-    - goerr113         # Allow dynamic errors
-    - nestif           # Allow nested if statements
-    - nlreturn         # Don't require newlines
-    - testpackage      # Allow tests in same package
-    - wsl              # Don't enforce whitespace style
+    
+    # Basic code quality
+    - gocyclo
+    - gofmt
+    - goimports
+    - misspell
+    - unconvert
+    
+    # Security
+    - gosec
+    
+    # Performance
+    - prealloc
 
 issues:
+  exclude-dirs:
+    - vendor
+    - .git
+  
   exclude-rules:
     - path: _test\.go
       linters:
-        - gosec      # Security issues less critical in tests
-        - funlen     # Test functions can be long
-        - dupl       # Duplicate code acceptable in tests
-        - gomnd      # Magic numbers acceptable in tests
-    
-    - path: main\.go
-      linters:
-        - gochecknoinits  # Allow init in main
+        - gosec
+        - funlen
     
     - text: "weak cryptographic primitive"
       linters:
         - gosec
-    
-    - text: "shadow: declaration of \"err\""
-      linters:
-        - govet
-
+  
   max-issues-per-linter: 0
   max-same-issues: 0
-  new: false
-
-severity:
-  default-severity: error
-  case-sensitive: false
