@@ -69,6 +69,8 @@ CupBot is a comprehensive Telegram bot written in Go for remote Windows computer
 
 ## 🛠️ **Quick Installation & Setup**
 
+> 📋 **For detailed GitHub repository setup instructions, see [REPOSITORY_SETUP.md](REPOSITORY_SETUP.md)**
+
 ### Option 1: Automated Installation (Recommended)
 ```bash
 # 1. Build and install as Windows service

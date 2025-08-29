@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # Enable version updates for Go modules
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "go"
+    reviewers:
+      - "YOUR_USERNAME"  # Replace with actual username
+    assignees:
+      - "YOUR_USERNAME"  # Replace with actual username
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps(dev)"
+    open-pull-requests-limit: 5
+    
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    reviewers:
+      - "YOUR_USERNAME"  # Replace with actual username
+    assignees:
+      - "YOUR_USERNAME"  # Replace with actual username
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 3
