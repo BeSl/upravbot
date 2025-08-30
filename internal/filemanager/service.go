@@ -1,6 +1,7 @@
 package filemanager
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"os"
@@ -214,15 +215,26 @@ func (s *Service) GetParentDirectory(path string) string {
 		return parent
 	}
 	
+	// Ensure we don't go above drive root on Windows
+	if parent == "." || (len(parent) == 2 && parent[1] == ':') {
+		return cleanPath
+	}
+	
 	return parent
 }
 
+// BreadcrumbItem represents a single item in breadcrumb navigation
+type BreadcrumbItem struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+}
+
 // GetDirectoryBreadcrumb creates a breadcrumb navigation for the path
-func (s *Service) GetDirectoryBreadcrumb(path string) []string {
+func (s *Service) GetDirectoryBreadcrumb(path string) []BreadcrumbItem {
 	cleanPath := filepath.Clean(path)
 	parts := strings.Split(cleanPath, string(filepath.Separator))
 	
-	var breadcrumb []string
+	var breadcrumb []BreadcrumbItem
 	currentPath := ""
 	
 	for i, part := range parts {
@@ -230,17 +242,102 @@ func (s *Service) GetDirectoryBreadcrumb(path string) []string {
 			continue
 		}
 		
+		var displayName string
 		if i == 0 && strings.Contains(part, ":") {
 			// Drive letter
 			currentPath = part + "\\"
+			displayName = part
 		} else {
 			currentPath = filepath.Join(currentPath, part)
+			displayName = part
 		}
 		
-		breadcrumb = append(breadcrumb, currentPath)
+		breadcrumb = append(breadcrumb, BreadcrumbItem{
+			Name: displayName,
+			Path: currentPath,
+		})
 	}
 	
 	return breadcrumb
+}
+
+// NavigationResponse represents a response for file manager navigation
+type NavigationResponse struct {
+	Content        string             `json:"content"`
+	Context        *NavigationContext `json:"context"`
+	RequiresUpdate bool               `json:"requires_update"`
+}
+
+// NavigationContext provides context for file manager navigation
+type NavigationContext struct {
+	CurrentPath     string           `json:"current_path"`
+	ParentPath      string           `json:"parent_path"`
+	Breadcrumbs     []BreadcrumbItem `json:"breadcrumbs"`
+	CanNavigateUp   bool             `json:"can_navigate_up"`
+	CurrentPage     int              `json:"current_page"`
+	TotalPages      int              `json:"total_pages"`
+	ViewHistory     []string         `json:"view_history"`      // For back button functionality
+	LastAction      string           `json:"last_action"`       // Track user's last action
+	TotalFiles      int              `json:"total_files"`
+	TotalDirectories int             `json:"total_directories"`
+}
+
+// UserPreferences stores user-specific file manager preferences
+type UserPreferences struct {
+	PageSize        int    `json:"page_size"`
+	SortBy          string `json:"sort_by"`    // name, size, date
+	SortOrder       string `json:"sort_order"` // asc, desc
+	ShowHiddenFiles bool   `json:"show_hidden_files"`
+	ViewMode        string `json:"view_mode"`  // list, details
+}
+
+// GetNavigationContext returns enhanced navigation context for a given path
+func (s *Service) GetNavigationContext(path string) *NavigationContext {
+	cleanPath := filepath.Clean(path)
+	parentPath := s.GetParentDirectory(cleanPath)
+	canNavigateUp := parentPath != cleanPath && len(parentPath) > 0
+	
+	return &NavigationContext{
+		CurrentPath:   cleanPath,
+		ParentPath:    parentPath,
+		Breadcrumbs:   s.GetDirectoryBreadcrumb(cleanPath),
+		CanNavigateUp: canNavigateUp,
+		CurrentPage:   1,
+		TotalPages:    1,
+		ViewHistory:   []string{},
+		LastAction:    "navigate",
+	}
+}
+
+// GetNavigationContextWithPagination returns navigation context with pagination info
+func (s *Service) GetNavigationContextWithPagination(path string, page int, result *PaginatedDirectoryResult) *NavigationContext {
+	cleanPath := filepath.Clean(path)
+	parentPath := s.GetParentDirectory(cleanPath)
+	canNavigateUp := parentPath != cleanPath && len(parentPath) > 0
+	
+	// Count directories and files
+	dirCount := 0
+	fileCount := 0
+	for _, file := range result.Files {
+		if file.IsDir {
+			dirCount++
+		} else {
+			fileCount++
+		}
+	}
+	
+	return &NavigationContext{
+		CurrentPath:      cleanPath,
+		ParentPath:       parentPath,
+		Breadcrumbs:      s.GetDirectoryBreadcrumb(cleanPath),
+		CanNavigateUp:    canNavigateUp,
+		CurrentPage:      result.CurrentPage,
+		TotalPages:       result.TotalPages,
+		ViewHistory:      []string{},
+		LastAction:       "navigate",
+		TotalFiles:       fileCount,
+		TotalDirectories: dirCount,
+	}
 }
 
 // IsValidPath checks if a path is valid and accessible
@@ -252,6 +349,75 @@ func (s *Service) IsValidPath(path string) bool {
 	cleanPath := filepath.Clean(path)
 	_, err := os.Stat(cleanPath)
 	return err == nil
+}
+
+// PaginatedDirectoryResult represents a paginated directory listing
+type PaginatedDirectoryResult struct {
+	Files       []FileInfo `json:"files"`
+	TotalFiles  int        `json:"total_files"`
+	CurrentPage int        `json:"current_page"`
+	TotalPages  int        `json:"total_pages"`
+	PageSize    int        `json:"page_size"`
+	HasNext     bool       `json:"has_next"`
+	HasPrev     bool       `json:"has_prev"`
+}
+
+// ListDirectoryPaginated lists files and directories with pagination support
+func (s *Service) ListDirectoryPaginated(path string, page int, pageSize int) (*PaginatedDirectoryResult, error) {
+	// Get all files first
+	allFiles, err := s.ListDirectory(path)
+	if err != nil {
+		return nil, err
+	}
+	
+	// Calculate pagination
+	totalFiles := len(allFiles)
+	if pageSize <= 0 {
+		pageSize = 20 // Default page size
+	}
+	
+	if page < 1 {
+		page = 1
+	}
+	
+	totalPages := (totalFiles + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+	
+	// Calculate start and end indices
+	startIdx := (page - 1) * pageSize
+	endIdx := startIdx + pageSize
+	
+	if startIdx >= totalFiles {
+		// Page is beyond available data, return empty result
+		return &PaginatedDirectoryResult{
+			Files:       []FileInfo{},
+			TotalFiles:  totalFiles,
+			CurrentPage: page,
+			TotalPages:  totalPages,
+			PageSize:    pageSize,
+			HasNext:     false,
+			HasPrev:     page > 1,
+		}, nil
+	}
+	
+	if endIdx > totalFiles {
+		endIdx = totalFiles
+	}
+	
+	// Extract the page slice
+	pageFiles := allFiles[startIdx:endIdx]
+	
+	return &PaginatedDirectoryResult{
+		Files:       pageFiles,
+		TotalFiles:  totalFiles,
+		CurrentPage: page,
+		TotalPages:  totalPages,
+		PageSize:    pageSize,
+		HasNext:     page < totalPages,
+		HasPrev:     page > 1,
+	}, nil
 }
 
 // GetAvailableDrives returns list of available drives based on configuration
@@ -343,4 +509,154 @@ func (s *Service) copyFile(src, dst string) error {
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err
+}
+
+// Callback data encoding/decoding utilities
+
+// EncodePathForCallback encodes a file path for use in callback data
+func (s *Service) EncodePathForCallback(path string) string {
+	return base64.URLEncoding.EncodeToString([]byte(path))
+}
+
+// DecodePathFromCallback decodes a file path from callback data
+func (s *Service) DecodePathFromCallback(encoded string) (string, error) {
+	decoded, err := base64.URLEncoding.DecodeString(encoded)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode callback path: %w", err)
+	}
+	
+	path := string(decoded)
+	cleanPath := filepath.Clean(path)
+	
+	// Validate path security
+	if !s.isDriveAllowed(cleanPath) {
+		return "", fmt.Errorf("access to drive not allowed")
+	}
+	
+	return cleanPath, nil
+}
+
+// ValidateCallbackPath validates if a decoded path is safe and accessible
+func (s *Service) ValidateCallbackPath(path string) error {
+	cleanPath := filepath.Clean(path)
+	
+	// Check drive access
+	if !s.isDriveAllowed(cleanPath) {
+		return fmt.Errorf("access to drive not allowed")
+	}
+	
+	// Check if path exists
+	if _, err := os.Stat(cleanPath); err != nil {
+		return fmt.Errorf("path not accessible: %w", err)
+	}
+	
+	return nil
+}
+
+// GetDriveSelectionResponse returns navigation response for drive selection
+func (s *Service) GetDriveSelectionResponse() *NavigationResponse {
+	drives := s.GetAvailableDrives()
+	
+	content := "📁 *File Manager - Drive Selection*\n\n"
+	if len(drives) == 0 {
+		content += "❌ No drives available in configuration"
+		return &NavigationResponse{
+			Content:        content,
+			RequiresUpdate: false,
+		}
+	}
+	
+	content += "💾 **Available Drives:**\n\n"
+	for _, drive := range drives {
+		content += fmt.Sprintf("• %s\\\n", drive)
+	}
+	content += "\n💡 *Click on a drive below to start browsing:*"
+	
+	return &NavigationResponse{
+		Content:        content,
+		RequiresUpdate: true,
+	}
+}
+
+// GetDirectoryNavigationResponse returns navigation response for directory browsing
+func (s *Service) GetDirectoryNavigationResponse(path string, page int) (*NavigationResponse, error) {
+	if !s.IsValidPath(path) {
+		return nil, fmt.Errorf("invalid or inaccessible path: %s", path)
+	}
+	
+	pageSize := 15 // Default page size for better mobile experience
+	result, err := s.ListDirectoryPaginated(path, page, pageSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list directory: %w", err)
+	}
+	
+	context := s.GetNavigationContextWithPagination(path, page, result)
+	content := s.generateDirectoryContent(context, result)
+	
+	return &NavigationResponse{
+		Content:        content,
+		Context:        context,
+		RequiresUpdate: true,
+	}, nil
+}
+
+// GetFileDetailsResponse returns navigation response for file details
+func (s *Service) GetFileDetailsResponse(filePath string) (*NavigationResponse, error) {
+	fileInfo, err := s.GetFileInfo(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+	
+	content := s.generateFileDetailsContent(fileInfo)
+	
+	return &NavigationResponse{
+		Content:        content,
+		RequiresUpdate: true,
+	}, nil
+}
+
+// generateDirectoryContent creates the text content for directory listing
+func (s *Service) generateDirectoryContent(context *NavigationContext, result *PaginatedDirectoryResult) string {
+	content := fmt.Sprintf("📁 *Current Directory*\n`%s`\n\n", context.CurrentPath)
+	
+	// Add breadcrumb path
+	if len(context.Breadcrumbs) > 0 {
+		breadcrumb := "📍 **Path:** "
+		for i, item := range context.Breadcrumbs {
+			if i > 0 {
+				breadcrumb += " > "
+			}
+			breadcrumb += item.Name
+		}
+		content += breadcrumb + "\n\n"
+	}
+	
+	// Add directory statistics
+	content += fmt.Sprintf("📊 **Contents:** %d folders, %d files", context.TotalDirectories, context.TotalFiles)
+	
+	// Add pagination info if needed
+	if result.TotalPages > 1 {
+		content += fmt.Sprintf(" (Page %d/%d)", result.CurrentPage, result.TotalPages)
+	}
+	content += "\n\n"
+	
+	if len(result.Files) == 0 {
+		content += "📭 *This directory is empty*\n\n"
+	} else {
+		content += "💡 *Click on any item below to navigate:*\n"
+	}
+	
+	return content
+}
+
+// generateFileDetailsContent creates content for file details view
+func (s *Service) generateFileDetailsContent(fileInfo *FileInfo) string {
+	content := "📄 *File Details*\n\n"
+	content += fmt.Sprintf("📛 **Name:** %s\n", fileInfo.Name)
+	content += fmt.Sprintf("📏 **Size:** %s\n", FormatSize(fileInfo.Size))
+	content += fmt.Sprintf("📅 **Modified:** %s\n", fileInfo.ModTime.Format("2006-01-02 15:04:05"))
+	content += fmt.Sprintf("🔒 **Permissions:** %s\n", fileInfo.Mode)
+	content += fmt.Sprintf("📍 **Path:** `%s`\n\n", fileInfo.Path)
+	
+	return content
 }
