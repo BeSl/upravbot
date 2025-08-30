@@ -46,11 +46,22 @@ CupBot is a comprehensive Telegram bot written in Go for remote Windows computer
 - ✅ **Admin Panel** - dedicated management interface
 - ✅ **Menu Button** - added after each response for easy navigation
 
-### 📁 **File Manager**
-- ✅ **Browse Files and Directories** - explore filesystem remotely
-- ✅ **Configurable Drive Access** - restrict access to specific drives
-- ✅ **Security Controls** - protected system directories and size limits
-- ✅ **File Operations** - list, download (configurable actions)
+### 📁 **Windows Explorer-Style File Manager** (ENHANCED!)
+- ✅ **Button-Driven Navigation** - click through directories like Windows Explorer
+- ✅ **Interactive Drive Selection** - visual drive picker with availability detection
+- ✅ **One-Click Directory Navigation** - click folders to enter, no more typing paths
+- ✅ **Clickable Breadcrumb Navigation** - see current path and click any segment to navigate
+- ✅ **File Details View** - comprehensive file information with context actions
+- ✅ **Parent Directory Navigation** - instant up navigation with dedicated button
+- ✅ **Windows-Style Icons** - folders (📁) and files (📄) clearly distinguished
+- ✅ **Download Integration** - one-click file downloads (when enabled)
+- ✅ **Security Controls** - protected system directories and drive restrictions
+- ✅ **Path Encoding** - secure callback data handling to prevent path traversal
+- ✅ **Large Directory Support** - smart pagination for directories with 20+ items
+- ✅ **Touch-Optimized Interface** - mobile-friendly button sizes and layout
+- ✅ **Real-time Directory Information** - shows folder/file counts and file sizes
+- ✅ **Quick Navigation Controls** - Up, Drives, Refresh buttons always available
+- ✅ **Legacy Command Support** - `/files <path>` still works for power users
 
 ### 📸 **Screenshot Capability**
 - ✅ **Desktop Screenshots** - capture current desktop state
@@ -132,7 +143,15 @@ CupBot features an advanced button-based interface with admin-specific capabilit
 - 💻 **System Status** - View complete system information
 - ⏰ **Uptime** - Check system uptime
 - 📝 **Command History** - View your recent commands
-- 📁 **File Manager** - Browse files and directories
+- 📁 **Interactive File Manager** - Click-based file system navigation
+  - 🖱️ **Clickable Drive Selection** - choose drives with buttons
+  - 📂 **Directory Navigation** - click folders to navigate
+  - 📄 **File Information** - detailed file properties and actions
+  - 🧭 **Breadcrumb Navigation** - visual path display and navigation
+  - ⬆️ **Parent Directory** - easy upward navigation
+  - 🔒 **Secure Path Handling** - protected against directory traversal
+  - 📊 **Directory Statistics** - file and folder counts
+  - 📄 **File Downloads** - one-click download for enabled actions
 - 📸 **Screenshot** - Take desktop screenshots
 - 🔔 **Events** - System event monitoring status
 - 📜 **Menu** - Quick access menu button after each response
@@ -153,11 +172,14 @@ CupBot features an advanced button-based interface with admin-specific capabilit
   - 🗑️ Delete users (with warnings)
   - 📊 View user statistics
 
-- 📁 **Enhanced File Manager** - Advanced file operations
-  - 📂 Browse all accessible drives
-  - 📄 Upload and download files
-  - 🔍 View file details and permissions
-  - 🚪 Safe access controls
+- 📁 **Enhanced Interactive File Manager** - Button-driven file operations
+  - 🖱️ **Visual Drive Selection** - clickable drive buttons
+  - 📂 **Click-Based Navigation** - no more typing paths
+  - 📄 **File Details Interface** - comprehensive file information
+  - 🧭 **Smart Breadcrumbs** - clickable path navigation
+  - ⬇️ **Integrated Downloads** - one-click file downloads
+  - 🔒 **Advanced Security** - path encoding and validation
+  - 📊 **Smart Pagination** - handles large directories efficiently
 
 - 📸 **Smart Screenshot Service**
   - ✅ Full desktop capture (interactive mode)
@@ -381,17 +403,87 @@ cupbot.exe -config path/to/config.yaml
 /history 5
 ```
 
-#### Файловый менеджер:
-```
-# Посмотреть доступные диски
+#### Interactive File Manager Features
+
+##### **New Click-Based Interface** 🖱️
+CupBot now features a completely redesigned file manager with intuitive button-based navigation:
+
+**Drive Selection**
+- 💾 **Visual Drive Picker** - clickable buttons for each available drive
+- ✅ **Availability Detection** - only shows accessible and allowed drives
+- 🔒 **Permission Aware** - respects configured drive restrictions
+
+**Directory Navigation**
+- 📁 **Clickable Folders** - click any folder to navigate into it
+- 📄 **File Information** - click files to view detailed properties
+- 🧭 **Breadcrumb Navigation** - see your current path and click to jump to any level
+- ⬆️ **Parent Navigation** - easy "up" button to navigate to parent directory
+- 🏠 **Drive Home** - quick return to drive selection
+
+**File Details Interface**
+- 📊 **Comprehensive Information** - file size, modification date, permissions
+- ⬇️ **One-Click Downloads** - download files when download action is enabled
+- 🔙 **Smart Navigation** - return to directory or jump to drives
+
+**User Experience Improvements**
+- 📱 **Mobile-Friendly** - designed for Telegram's button interface
+- 🚀 **No Typing Required** - complete navigation through buttons
+- 📊 **Directory Statistics** - shows folder and file counts
+- 🔍 **Clear Icons** - folders (📁) and files (📄) clearly distinguished
+- ⚡ **Fast Navigation** - instant response to button clicks
+
+**Security & Performance**
+- 🔒 **Secure Path Encoding** - all paths encoded in callback data
+- 🛡️ **Path Traversal Protection** - prevents access to restricted areas
+- 📄 **Pagination Support** - handles directories with many files (20+ items)
+- ⚠️ **Error Handling** - graceful handling of permission errors
+
+##### **Enhanced Commands** (Legacy Support)
+Traditional commands still work for power users:
+
+```bash
+# View available drives
 /files
 
-# Просмотреть содержимое диска
-/files C:
-
-# Просмотреть папку
-/files C:\Users
+# Navigate to specific directory
+/files C:\Users\Documents
 ```
+
+##### **Configuration Options**
+File manager behavior can be customized in `config.yaml`:
+
+```yaml
+file_manager:
+  # Drives accessible through file manager
+  allowed_drives: ["C:", "D:", "E:"]
+  
+  # Maximum file size for downloads (bytes)
+  max_file_size: 10485760  # 10MB
+  
+  # Enabled actions: list, download, upload, delete
+  allowed_actions: ["list", "download"]
+  
+  # Download storage path
+  download_path: "./downloads"
+  
+  # Upload storage path
+  upload_path: "./uploads"
+```
+
+**Navigation Examples:**
+1. **Start**: User clicks "📁 File Manager" button
+2. **Drive Selection**: Choose from "💾 C:" "💾 D:" etc.
+3. **Browse Directory**: Click "📁 Users" to navigate
+4. **File Details**: Click "📄 document.pdf" for file info
+5. **Download**: Click "⬇️ Download" to get the file
+6. **Navigate Back**: Use "🔙 Back to Directory" or "🏠 Drives"
+
+**Benefits of Interactive Interface:**
+- 🚀 **Faster Navigation** - no need to type paths
+- 📱 **Better Mobile Experience** - optimized for Telegram buttons
+- 🔰 **More Intuitive** - familiar file explorer-like interface
+- 🛡️ **Inherently Safer** - prevents path injection attacks
+- 📊 **Better Feedback** - shows directory contents and statistics
 
 #### Скриншот рабочего стола:
 ```

@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -266,6 +267,10 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery, user *databa
 	case callback.Data == "system_tools":
 		response, success = b.handleSystemToolsCallback(user)
 
+	// File manager interactive navigation
+	case strings.HasPrefix(callback.Data, "fm_"):
+		response, success = b.handleFileManagerCallback(callback, user)
+
 	default:
 		response = "Неизвестная команда"
 		success = false
@@ -277,7 +282,7 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery, user *databa
 		msg.ParseMode = tgbotapi.ModeMarkdown
 
 		// Добавляем кнопку меню после каждого callback ответа
-		if !isMenuCallback(callback.Data) && !isPowerCallback(callback.Data) && !isUserManagementCallback(callback.Data) {
+		if !isMenuCallback(callback.Data) && !isPowerCallback(callback.Data) && !isUserManagementCallback(callback.Data) && !isFileManagerCallback(callback.Data) {
 			msg.ReplyMarkup = b.getMenuKeyboard()
 		}
 
@@ -295,6 +300,12 @@ func (b *Bot) handleCallbackQuery(callback *tgbotapi.CallbackQuery, user *databa
 			msg.ReplyMarkup = b.getFileManagerKeyboard()
 		case "system_tools":
 			msg.ReplyMarkup = b.getSystemToolsKeyboard()
+		case "files":
+			// Show drive selection keyboard for files callback
+			drives := b.fileManager.GetAvailableDrives()
+			if len(drives) > 0 {
+				msg.ReplyMarkup = b.generateEnhancedDriveSelectionKeyboard(drives)
+			}
 		}
 
 		if _, err := b.api.Send(msg); err != nil {
@@ -863,46 +874,41 @@ func (b *Bot) getMenuKeyboard() tgbotapi.InlineKeyboardMarkup {
 }
 
 // New service handlers
+// Enhanced handleFiles with interactive interface
 func (b *Bot) handleFiles(message *tgbotapi.Message, user *database.User, args string) (string, bool) {
-	if args == "" {
-		// List available drives
-		drives := b.fileManager.GetAvailableDrives()
-		if len(drives) == 0 {
-			return "❌ No drives available in configuration", false
+	// If args provided, still support legacy command format
+	if args != "" {
+		// Legacy direct path browsing
+		response, err := b.fileManager.GetDirectoryNavigationResponse(args, 1)
+		if err != nil {
+			return fmt.Sprintf("❌ Error: %v", err), false
 		}
-
-		response := "📁 *File Manager*\n\nAvailable drives:\n"
-		for _, drive := range drives {
-			response += fmt.Sprintf("• %s\n", drive)
+		
+		// Send response with interactive keyboard
+		paginatedResult, err := b.fileManager.ListDirectoryPaginated(args, 1, 15)
+		if err != nil {
+			return fmt.Sprintf("❌ Error listing directory: %v", err), false
 		}
-		response += "\nUsage: `/files <drive>` to browse\nExample: `/files C:`"
-		return response, true
+		
+		keyboard := b.generateEnhancedDirectoryKeyboard(response.Context, paginatedResult)
+		msg := tgbotapi.NewMessage(message.Chat.ID, response.Content)
+		msg.ParseMode = tgbotapi.ModeMarkdown
+		msg.ReplyMarkup = keyboard
+		b.api.Send(msg)
+		
+		return "", true // Empty response since we sent the message
 	}
-
-	// List directory contents
-	files, err := b.fileManager.ListDirectory(args)
-	if err != nil {
-		return fmt.Sprintf("❌ Error listing directory: %v", err), false
-	}
-
-	response := fmt.Sprintf("📁 *Directory: %s*\n\n", args)
-	for i, file := range files {
-		if i >= 20 { // Limit to 20 items
-			response += "... and more\n"
-			break
-		}
-		icon := "📄"
-		if file.IsDir {
-			icon = "📁"
-		}
-		sizeStr := "<DIR>"
-		if !file.IsDir {
-			sizeStr = filemanager.FormatSize(file.Size)
-		}
-		response += fmt.Sprintf("%s %s (%s)\n", icon, file.Name, sizeStr)
-	}
-
-	return response, true
+	
+	// No args - show interactive drive selection
+	response := b.fileManager.GetDriveSelectionResponse()
+	keyboard := b.generateEnhancedDriveSelectionKeyboard(b.fileManager.GetAvailableDrives())
+	
+	msg := tgbotapi.NewMessage(message.Chat.ID, response.Content)
+	msg.ParseMode = tgbotapi.ModeMarkdown
+	msg.ReplyMarkup = keyboard
+	b.api.Send(msg)
+	
+	return "", true // Empty response since we sent the message
 }
 
 func (b *Bot) handleScreenshot(message *tgbotapi.Message, user *database.User, args string) (string, bool) {
@@ -933,7 +939,7 @@ func (b *Bot) handleFilesCallback(user *database.User) (string, bool) {
 	for _, drive := range drives {
 		response += fmt.Sprintf("• %s\n", drive)
 	}
-	response += "\nUse command `/files <drive>` to browse\nExample: `/files C:`"
+	response += "\n💡 *Click on a drive below to start browsing:*"
 	return response, true
 }
 
@@ -985,6 +991,10 @@ func isUserManagementCallback(data string) bool {
 		}
 	}
 	return false
+}
+
+func isFileManagerCallback(data string) bool {
+	return strings.HasPrefix(data, "fm_") || data == "files" || data == "file_manager_admin"
 }
 
 func (b *Bot) getPowerMenuKeyboard() tgbotapi.InlineKeyboardMarkup {
@@ -1048,10 +1058,11 @@ func (b *Bot) getUserManagementKeyboard() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
 
+// Update the existing getFileManagerKeyboard to use new interactive interface
 func (b *Bot) getFileManagerKeyboard() tgbotapi.InlineKeyboardMarkup {
 	rows := [][]tgbotapi.InlineKeyboardButton{
 		{
-			tgbotapi.NewInlineKeyboardButtonData("📁 Browse Files", "files"),
+			tgbotapi.NewInlineKeyboardButtonData("📁 Browse Files", "fm_drives"),
 		},
 		{
 			tgbotapi.NewInlineKeyboardButtonData("🔙 Admin Menu", "admin_menu"),
@@ -1315,5 +1326,594 @@ func (b *Bot) handleSystemToolsCallback(user *database.User) (string, bool) {
 		return "❌ Access denied: Admin privileges required", false
 	}
 
-	return "🔧 *System Tools*\n\nAdvanced system monitoring and management tools.\n\nSelect a tool from the menu below:", true
+	return "🛠️ *System Tools*\n\nCollection of system monitoring and diagnostic tools:", true
+}
+
+// File Manager Keyboard Generation Methods
+
+// generateEnhancedDriveSelectionKeyboard creates enhanced keyboard for drive selection
+func (b *Bot) generateEnhancedDriveSelectionKeyboard(drives []string) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	
+	if len(drives) == 0 {
+		// Add back to menu button only
+		rows = append(rows, []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData("🔙 Back to Menu", "main_menu"),
+		})
+		return tgbotapi.NewInlineKeyboardMarkup(rows...)
+	}
+	
+	// Add drive buttons (2 per row for better visual layout)
+	for i := 0; i < len(drives); i += 2 {
+		var row []tgbotapi.InlineKeyboardButton
+		
+		// First drive in row
+		driveLabel := fmt.Sprintf("💾 %s", drives[i])
+		driveCallback := fmt.Sprintf("fm_drive_%s", drives[i][:1]) // Just the drive letter
+		row = append(row, tgbotapi.NewInlineKeyboardButtonData(driveLabel, driveCallback))
+		
+		// Second drive in row (if exists)
+		if i+1 < len(drives) {
+			driveLabel2 := fmt.Sprintf("💾 %s", drives[i+1])
+			driveCallback2 := fmt.Sprintf("fm_drive_%s", drives[i+1][:1])
+			row = append(row, tgbotapi.NewInlineKeyboardButtonData(driveLabel2, driveCallback2))
+		}
+		
+		rows = append(rows, row)
+	}
+	
+	// Add back to menu button
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Back to Menu", "main_menu"),
+	})
+	
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+// generateEnhancedDirectoryKeyboard creates enhanced keyboard for directory navigation
+func (b *Bot) generateEnhancedDirectoryKeyboard(context *filemanager.NavigationContext, result *filemanager.PaginatedDirectoryResult) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	
+	// Add breadcrumb row for deeper paths (clickable breadcrumb navigation)
+	if len(context.Breadcrumbs) > 2 {
+		breadcrumbRow := b.generateBreadcrumbRow(context)
+		if len(breadcrumbRow) > 0 {
+			rows = append(rows, breadcrumbRow)
+		}
+	}
+	
+	// Add file/directory rows (1 per row for touch-friendly interface)
+	for _, file := range result.Files {
+		rows = append(rows, b.generateFileRow(file))
+	}
+	
+	// Add pagination row if needed
+	if result.TotalPages > 1 {
+		paginationRow := b.generatePaginationRow(context, result)
+		if len(paginationRow) > 0 {
+			rows = append(rows, paginationRow)
+		}
+	}
+	
+	// Add navigation controls row
+	navRow := b.generateNavigationControlsRow(context)
+	if len(navRow) > 0 {
+		rows = append(rows, navRow)
+	}
+	
+	// Add menu return row
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Back to Menu", "main_menu"),
+	})
+	
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+// generateBreadcrumbRow creates clickable breadcrumb navigation
+func (b *Bot) generateBreadcrumbRow(context *filemanager.NavigationContext) []tgbotapi.InlineKeyboardButton {
+	var buttons []tgbotapi.InlineKeyboardButton
+	
+	// Limit breadcrumbs to avoid telegram callback data limits
+	maxBreadcrumbs := 3
+	startIdx := 0
+	if len(context.Breadcrumbs) > maxBreadcrumbs {
+		startIdx = len(context.Breadcrumbs) - maxBreadcrumbs
+		// Add "..." button for truncated breadcrumbs
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("…", "fm_breadcrumb_root"))
+	}
+	
+	for i := startIdx; i < len(context.Breadcrumbs); i++ {
+		item := context.Breadcrumbs[i]
+		encodedPath := b.fileManager.EncodePathForCallback(item.Path)
+		label := item.Name
+		if len(label) > 8 {
+			label = label[:8] + "…"
+		}
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData(label, "fm_breadcrumb_"+encodedPath))
+	}
+	
+	return buttons
+}
+
+// generateFileRow creates a button row for a file or directory
+func (b *Bot) generateFileRow(file filemanager.FileInfo) []tgbotapi.InlineKeyboardButton {
+	var icon string
+	var callbackPrefix string
+	
+	if file.IsDir {
+		icon = "📁"
+		callbackPrefix = "fm_dir_"
+	} else {
+		icon = "📄"
+		callbackPrefix = "fm_file_"
+	}
+	
+	// Truncate long file names for better display
+	label := file.Name
+	if len(label) > 35 {
+		label = label[:32] + "…"
+	}
+	
+	// Add size info for files (not directories)
+	if !file.IsDir {
+		sizeStr := filemanager.FormatSize(file.Size)
+		label = fmt.Sprintf("%s (%s)", label, sizeStr)
+	}
+	
+	encodedPath := b.fileManager.EncodePathForCallback(file.Path)
+	labelWithIcon := fmt.Sprintf("%s %s", icon, label)
+	
+	return []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData(labelWithIcon, callbackPrefix+encodedPath),
+	}
+}
+
+// generatePaginationRow creates pagination controls
+func (b *Bot) generatePaginationRow(context *filemanager.NavigationContext, result *filemanager.PaginatedDirectoryResult) []tgbotapi.InlineKeyboardButton {
+	var buttons []tgbotapi.InlineKeyboardButton
+	encodedPath := b.fileManager.EncodePathForCallback(context.CurrentPath)
+	
+	// Previous page button
+	if result.HasPrev {
+		prevCallback := fmt.Sprintf("fm_page_%s_%d", encodedPath, result.CurrentPage-1)
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("◀️ Prev", prevCallback))
+	}
+	
+	// Page info button (non-clickable info)
+	pageInfo := fmt.Sprintf("Page %d/%d", result.CurrentPage, result.TotalPages)
+	buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData(pageInfo, "fm_page_info"))
+	
+	// Next page button
+	if result.HasNext {
+		nextCallback := fmt.Sprintf("fm_page_%s_%d", encodedPath, result.CurrentPage+1)
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("Next ▶️", nextCallback))
+	}
+	
+	return buttons
+}
+
+// generateNavigationControlsRow creates navigation control buttons
+func (b *Bot) generateNavigationControlsRow(context *filemanager.NavigationContext) []tgbotapi.InlineKeyboardButton {
+	var buttons []tgbotapi.InlineKeyboardButton
+	
+	// Up button (if can navigate up)
+	if context.CanNavigateUp {
+		encodedParent := b.fileManager.EncodePathForCallback(context.ParentPath)
+		buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("⬆️ Up", "fm_parent_"+encodedParent))
+	}
+	
+	// Drives button (always available)
+	buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("🏠 Drives", "fm_drives"))
+	
+	// Refresh button
+	encodedCurrent := b.fileManager.EncodePathForCallback(context.CurrentPath)
+	buttons = append(buttons, tgbotapi.NewInlineKeyboardButtonData("🔄 Refresh", "fm_dir_"+encodedCurrent))
+	
+	return buttons
+}
+
+// generateEnhancedFileDetailsKeyboard creates enhanced keyboard for file details
+func (b *Bot) generateEnhancedFileDetailsKeyboard(filePath string) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	
+	// Add download button if download is enabled
+	if b.config.IsActionAllowed("download") {
+		encodedPath := b.fileManager.EncodePathForCallback(filePath)
+		rows = append(rows, []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData("⬇️ Download", "fm_download_"+encodedPath),
+		})
+	}
+	
+	// Add properties/info button
+	encodedPath := b.fileManager.EncodePathForCallback(filePath)
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("ℹ️ Properties", "fm_file_"+encodedPath),
+	})
+	
+	// Add navigation buttons
+	parentPath := b.fileManager.GetParentDirectory(filePath)
+	encodedParent := b.fileManager.EncodePathForCallback(parentPath)
+	
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Back to Directory", "fm_dir_"+encodedParent),
+	})
+	
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("🏠 Drives", "fm_drives"),
+	})
+	
+	// Add back to menu button
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Back to Menu", "main_menu"),
+	})
+	
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+// generateDirectoryResponse creates the response text for directory listing
+func (b *Bot) generateDirectoryResponse(navContext *filemanager.NavigationContext, files []filemanager.FileInfo) string {
+	response := fmt.Sprintf("📁 *Current Directory*\n`%s`\n\n", navContext.CurrentPath)
+	
+	// Add breadcrumb
+	if len(navContext.Breadcrumbs) > 0 {
+		breadcrumb := "📍 **Path:** "
+		for i, item := range navContext.Breadcrumbs {
+			if i > 0 {
+				breadcrumb += " > "
+			}
+			breadcrumb += item.Name
+		}
+		response += breadcrumb + "\n\n"
+	}
+	
+	// Add directory/file counts
+	dirCount := 0
+	fileCount := 0
+	for _, file := range files {
+		if file.IsDir {
+			dirCount++
+		} else {
+			fileCount++
+		}
+	}
+	
+	response += fmt.Sprintf("📊 **Contents:** %d folders, %d files\n\n", dirCount, fileCount)
+	
+	if len(files) == 0 {
+		response += "📭 *This directory is empty*\n\n"
+	} else {
+		response += "💡 *Click on any item below to navigate:*\n"
+		if len(files) > 20 {
+			response += "⚠️ *Showing first 20 items*\n"
+		}
+	}
+	
+	return response
+}
+
+// generatePaginatedDirectoryResponse creates the response text for paginated directory listing
+func (b *Bot) generatePaginatedDirectoryResponse(navContext *filemanager.NavigationContext, result *filemanager.PaginatedDirectoryResult) string {
+	response := fmt.Sprintf("📁 *Current Directory*\n`%s`\n\n", navContext.CurrentPath)
+	
+	// Add breadcrumb
+	if len(navContext.Breadcrumbs) > 0 {
+		breadcrumb := "📍 **Path:** "
+		for i, item := range navContext.Breadcrumbs {
+			if i > 0 {
+				breadcrumb += " > "
+			}
+			breadcrumb += item.Name
+		}
+		response += breadcrumb + "\n\n"
+	}
+	
+	// Add directory/file counts with pagination info
+	dirCount := 0
+	fileCount := 0
+	for _, file := range result.Files {
+		if file.IsDir {
+			dirCount++
+		} else {
+			fileCount++
+		}
+	}
+	
+	response += fmt.Sprintf("📊 **Contents:** %d total items\n", result.TotalFiles)
+	if result.TotalPages > 1 {
+		response += fmt.Sprintf("📄 **Page %d of %d** (%d folders, %d files shown)\n\n", 
+			result.CurrentPage, result.TotalPages, dirCount, fileCount)
+	} else {
+		response += fmt.Sprintf("📄 **%d folders, %d files**\n\n", dirCount, fileCount)
+	}
+	
+	if len(result.Files) == 0 {
+		if result.TotalFiles == 0 {
+			response += "📭 *This directory is empty*\n\n"
+		} else {
+			response += "📭 *No items on this page*\n\n"
+		}
+	} else {
+		response += "💡 *Click on any item below to navigate:*\n"
+	}
+	
+	return response
+}
+
+// generatePaginatedDirectoryKeyboard creates keyboard for paginated directory navigation
+func (b *Bot) generatePaginatedDirectoryKeyboard(navContext *filemanager.NavigationContext, result *filemanager.PaginatedDirectoryResult) tgbotapi.InlineKeyboardMarkup {
+	var rows [][]tgbotapi.InlineKeyboardButton
+	
+	// Add file/directory buttons (1 per row for readability)
+	for _, file := range result.Files {
+		encodedPath := b.fileManager.EncodePathForCallback(file.Path)
+		
+		var icon, callbackPrefix string
+		if file.IsDir {
+			icon = "📁"
+			callbackPrefix = "fm_dir_"
+		} else {
+			icon = "📄"
+			callbackPrefix = "fm_file_"
+		}
+		
+		buttonText := fmt.Sprintf("%s %s", icon, file.Name)
+		if len(buttonText) > 30 {
+			buttonText = buttonText[:27] + "..."
+		}
+		
+		rows = append(rows, []tgbotapi.InlineKeyboardButton{
+			tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackPrefix+encodedPath),
+		})
+	}
+	
+	// Add pagination buttons if needed
+	if result.TotalPages > 1 {
+		var paginationRow []tgbotapi.InlineKeyboardButton
+		encodedCurrentPath := b.fileManager.EncodePathForCallback(navContext.CurrentPath)
+		
+		if result.HasPrev {
+			paginationRow = append(paginationRow, tgbotapi.NewInlineKeyboardButtonData(
+				"◀️ Prev", fmt.Sprintf("fm_page_%s_%d", encodedCurrentPath, result.CurrentPage-1)))
+		}
+		
+		// Page indicator (non-clickable info)
+		paginationRow = append(paginationRow, tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%d/%d", result.CurrentPage, result.TotalPages), "fm_page_info"))
+		
+		if result.HasNext {
+			paginationRow = append(paginationRow, tgbotapi.NewInlineKeyboardButtonData(
+				"Next ▶️", fmt.Sprintf("fm_page_%s_%d", encodedCurrentPath, result.CurrentPage+1)))
+		}
+		
+		rows = append(rows, paginationRow)
+	}
+	
+	// Add navigation buttons
+	var navRow []tgbotapi.InlineKeyboardButton
+	
+	if navContext.CanNavigateUp {
+		encodedParent := b.fileManager.EncodePathForCallback(navContext.ParentPath)
+		navRow = append(navRow, tgbotapi.NewInlineKeyboardButtonData(
+			"⬆️ Parent", "fm_parent_"+encodedParent))
+	}
+	
+	navRow = append(navRow, tgbotapi.NewInlineKeyboardButtonData(
+		"🏠 Drives", "fm_drives"))
+	
+	if len(navRow) > 0 {
+		rows = append(rows, navRow)
+	}
+	
+	// Add back to menu button
+	rows = append(rows, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("🔙 Back to Menu", "main_menu"),
+	})
+	
+	return tgbotapi.NewInlineKeyboardMarkup(rows...)
+}
+
+// File Manager Interactive Navigation Handlers
+
+// handleFileManagerCallback processes all file manager navigation callbacks
+func (b *Bot) handleFileManagerCallback(callback *tgbotapi.CallbackQuery, user *database.User) (string, bool) {
+	callbackData := callback.Data
+	
+	// Parse callback type
+	switch {
+	case callbackData == "fm_drives":
+		return b.handleFileDrivesCallback(callback, user)
+	case strings.HasPrefix(callbackData, "fm_drive_"):
+		drive := strings.TrimPrefix(callbackData, "fm_drive_")
+		return b.handleFileDriveCallback(callback, user, drive)
+	case strings.HasPrefix(callbackData, "fm_dir_"):
+		encodedPath := strings.TrimPrefix(callbackData, "fm_dir_")
+		return b.handleFileDirectoryCallback(callback, user, encodedPath)
+	case strings.HasPrefix(callbackData, "fm_file_"):
+		encodedPath := strings.TrimPrefix(callbackData, "fm_file_")
+		return b.handleFileDetailsCallback(callback, user, encodedPath)
+	case strings.HasPrefix(callbackData, "fm_parent_"):
+		encodedPath := strings.TrimPrefix(callbackData, "fm_parent_")
+		return b.handleFileParentCallback(callback, user, encodedPath)
+	case strings.HasPrefix(callbackData, "fm_download_"):
+		encodedPath := strings.TrimPrefix(callbackData, "fm_download_")
+		return b.handleFileDownloadCallback(callback, user, encodedPath)
+	case strings.HasPrefix(callbackData, "fm_page_"):
+		parts := strings.Split(strings.TrimPrefix(callbackData, "fm_page_"), "_")
+		if len(parts) >= 2 {
+			encodedPath := parts[0]
+			page := parts[1]
+			return b.handleFilePaginationCallback(callback, user, encodedPath, page)
+		}
+	case strings.HasPrefix(callbackData, "fm_breadcrumb_"):
+		encodedPath := strings.TrimPrefix(callbackData, "fm_breadcrumb_")
+		return b.handleFileBreadcrumbCallback(callback, user, encodedPath)
+	case callbackData == "fm_page_info":
+		// Non-functional page info button, just acknowledge
+		return "", true
+	}
+	
+	return "❌ Unknown file manager command", false
+}
+
+// handleFileDrivesCallback shows available drives with enhanced interface
+func (b *Bot) handleFileDrivesCallback(callback *tgbotapi.CallbackQuery, user *database.User) (string, bool) {
+	response := b.fileManager.GetDriveSelectionResponse()
+	
+	// Generate enhanced drive selection keyboard
+	drives := b.fileManager.GetAvailableDrives()
+	keyboard := b.generateEnhancedDriveSelectionKeyboard(drives)
+	
+	// Update the message with keyboard
+	if err := b.updateCallbackMessage(callback, response.Content, keyboard); err != nil {
+		log.Printf("Failed to update message: %v", err)
+		return "❌ Error updating interface", false
+	}
+	
+	return "", true // Empty response since we updated the message
+}
+
+// handleFileDriveCallback navigates to a specific drive
+func (b *Bot) handleFileDriveCallback(callback *tgbotapi.CallbackQuery, user *database.User, drive string) (string, bool) {
+	drivePath := drive + ":\\"
+	return b.navigateToDirectory(callback, user, drivePath)
+}
+
+// handleFileDirectoryCallback navigates to a directory
+func (b *Bot) handleFileDirectoryCallback(callback *tgbotapi.CallbackQuery, user *database.User, encodedPath string) (string, bool) {
+	path, err := b.fileManager.DecodePathFromCallback(encodedPath)
+	if err != nil {
+		return fmt.Sprintf("❌ Invalid path: %v", err), false
+	}
+	
+	return b.navigateToDirectory(callback, user, path)
+}
+
+// handleFileDetailsCallback shows enhanced file details
+func (b *Bot) handleFileDetailsCallback(callback *tgbotapi.CallbackQuery, user *database.User, encodedPath string) (string, bool) {
+	path, err := b.fileManager.DecodePathFromCallback(encodedPath)
+	if err != nil {
+		return fmt.Sprintf("❌ Invalid path: %v", err), false
+	}
+	
+	response, err := b.fileManager.GetFileDetailsResponse(path)
+	if err != nil {
+		return fmt.Sprintf("❌ Error: %v", err), false
+	}
+	
+	keyboard := b.generateEnhancedFileDetailsKeyboard(path)
+	
+	// Update the message with keyboard
+	if err := b.updateCallbackMessage(callback, response.Content, keyboard); err != nil {
+		log.Printf("Failed to update message: %v", err)
+		return "❌ Error updating interface", false
+	}
+	
+	return "", true
+}
+
+// handleFileParentCallback navigates to parent directory
+func (b *Bot) handleFileParentCallback(callback *tgbotapi.CallbackQuery, user *database.User, encodedPath string) (string, bool) {
+	path, err := b.fileManager.DecodePathFromCallback(encodedPath)
+	if err != nil {
+		return fmt.Sprintf("❌ Invalid path: %v", err), false
+	}
+	
+	parentPath := b.fileManager.GetParentDirectory(path)
+	if parentPath == path {
+		// Already at root, go to drives
+		return b.handleFileDrivesCallback(callback, user)
+	}
+	
+	return b.navigateToDirectory(callback, user, parentPath)
+}
+
+// handleFileDownloadCallback initiates file download
+func (b *Bot) handleFileDownloadCallback(callback *tgbotapi.CallbackQuery, user *database.User, encodedPath string) (string, bool) {
+	path, err := b.fileManager.DecodePathFromCallback(encodedPath)
+	if err != nil {
+		return fmt.Sprintf("❌ Invalid path: %v", err), false
+	}
+	
+	downloadPath, err := b.fileManager.DownloadFile(path)
+	if err != nil {
+		return fmt.Sprintf("❌ Download failed: %v", err), false
+	}
+	
+	// Send file to user
+	doc := tgbotapi.NewDocument(callback.Message.Chat.ID, tgbotapi.FilePath(downloadPath))
+	if _, err := b.api.Send(doc); err != nil {
+		return fmt.Sprintf("❌ Failed to send file: %v", err), false
+	}
+	
+	return "✅ File downloaded and sent!", true
+}
+
+// handleFileBreadcrumbCallback handles breadcrumb navigation
+func (b *Bot) handleFileBreadcrumbCallback(callback *tgbotapi.CallbackQuery, user *database.User, encodedPath string) (string, bool) {
+	if encodedPath == "root" {
+		// Navigate to drives selection
+		return b.handleFileDrivesCallback(callback, user)
+	}
+	
+	path, err := b.fileManager.DecodePathFromCallback(encodedPath)
+	if err != nil {
+		return fmt.Sprintf("❌ Invalid path: %v", err), false
+	}
+	
+	return b.navigateToDirectory(callback, user, path)
+}
+
+// handleFilePaginationCallback handles directory pagination
+func (b *Bot) handleFilePaginationCallback(callback *tgbotapi.CallbackQuery, user *database.User, encodedPath, pageStr string) (string, bool) {
+	path, err := b.fileManager.DecodePathFromCallback(encodedPath)
+	if err != nil {
+		return fmt.Sprintf("❌ Invalid path: %v", err), false
+	}
+	
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		return "❌ Invalid page number", false
+	}
+	
+	return b.navigateToDirectoryPaginated(callback, user, path, page)
+}
+
+// navigateToDirectoryPaginated handles enhanced paginated directory navigation
+func (b *Bot) navigateToDirectoryPaginated(callback *tgbotapi.CallbackQuery, user *database.User, path string, page int) (string, bool) {
+	response, err := b.fileManager.GetDirectoryNavigationResponse(path, page)
+	if err != nil {
+		return fmt.Sprintf("❌ Error: %v", err), false
+	}
+	
+	// Get paginated result for keyboard generation
+	paginatedResult, err := b.fileManager.ListDirectoryPaginated(path, page, 15)
+	if err != nil {
+		return fmt.Sprintf("❌ Error listing directory: %v", err), false
+	}
+	
+	keyboard := b.generateEnhancedDirectoryKeyboard(response.Context, paginatedResult)
+	
+	// Update the message with keyboard
+	if err := b.updateCallbackMessage(callback, response.Content, keyboard); err != nil {
+		log.Printf("Failed to update message: %v", err)
+		return "❌ Error updating interface", false
+	}
+	
+	return "", true
+}
+
+// navigateToDirectory is a common function for directory navigation
+func (b *Bot) navigateToDirectory(callback *tgbotapi.CallbackQuery, user *database.User, path string) (string, bool) {
+	// Use paginated navigation with page 1 as default
+	return b.navigateToDirectoryPaginated(callback, user, path, 1)
+}
+
+// updateCallbackMessage updates the callback message with new content and keyboard
+func (b *Bot) updateCallbackMessage(callback *tgbotapi.CallbackQuery, text string, keyboard tgbotapi.InlineKeyboardMarkup) error {
+	edit := tgbotapi.NewEditMessageText(callback.Message.Chat.ID, callback.Message.MessageID, text)
+	edit.ParseMode = tgbotapi.ModeMarkdown
+	edit.ReplyMarkup = &keyboard
+	
+	_, err := b.api.Send(edit)
+	return err
 }
