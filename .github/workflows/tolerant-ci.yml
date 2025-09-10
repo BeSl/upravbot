@@ -89,7 +89,7 @@ jobs:
       run: go mod download
 
     - name: golangci-lint (non-blocking)
-      uses: golangci/golangci-lint-action@v6
+      uses: golangci/golangci-lint-action@v8
       with:
         version: v1.55.2
         args: --timeout=5m --skip-dirs=vendor
